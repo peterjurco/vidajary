@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+import SwiftData
 
 struct PreviewView: View {
     @Environment(\.modelContext) private var context
