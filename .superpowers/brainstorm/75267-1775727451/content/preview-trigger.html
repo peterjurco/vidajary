@@ -1,0 +1,82 @@
+<h2>How to trigger Preview</h2>
+<p class="subtitle">Bottom of the camera screen. How does the user get to the preview?</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:16px;">
+      <div style="background:#000;border-radius:12px;overflow:hidden;height:180px;display:flex;flex-direction:column;">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+          <span style="color:#333;font-size:11px;">[ viewfinder ]</span>
+        </div>
+        <div style="padding:12px 20px;display:flex;justify-content:space-between;align-items:center;">
+          <div style="width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;">
+            <span style="color:white;font-size:8px;">⊕</span>
+          </div>
+          <div style="width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;">
+            <div style="width:24px;height:24px;background:#e53935;border-radius:50%;"></div>
+          </div>
+          <div style="width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;">
+            <span style="color:white;font-size:14px;">▶</span>
+          </div>
+        </div>
+        <div style="padding:0 20px 10px;display:flex;justify-content:space-between;">
+          <span style="color:rgba(255,255,255,0.25);font-size:9px;letter-spacing:1px;text-align:center;width:36px;">LIBRARY</span>
+          <span style="width:60px;"></span>
+          <span style="color:rgba(255,255,255,0.25);font-size:9px;letter-spacing:1px;text-align:center;width:36px;">PREVIEW</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Button flanking record</h3>
+      <p>▶ button to the right of the record button. Always visible, one tap away.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:16px;">
+      <div style="background:#000;border-radius:12px;overflow:hidden;height:180px;display:flex;flex-direction:column;">
+        <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="color:#ccc;font-size:10px;letter-spacing:3px;text-transform:uppercase;">Vacation 2024</span>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <span style="color:rgba(255,255,255,0.4);font-size:12px;">⊕</span>
+            <span style="color:rgba(255,255,255,0.4);font-size:12px;">▶</span>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;">
+          <span style="color:#333;font-size:11px;">[ viewfinder ]</span>
+        </div>
+        <div style="padding:12px 20px;display:flex;justify-content:center;align-items:center;">
+          <div style="width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;">
+            <div style="width:24px;height:24px;background:#e53935;border-radius:50%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Icons in top bar</h3>
+      <p>"Add from library" and "Preview" live next to the project name at the top. Bottom is clean — just the record button.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:16px;">
+      <div style="background:#000;border-radius:12px;overflow:hidden;height:180px;display:flex;flex-direction:column;">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative;">
+          <span style="color:#333;font-size:11px;">[ viewfinder ]</span>
+          <div style="position:absolute;bottom:8px;right:12px;width:44px;height:28px;background:rgba(255,255,255,0.08);border-radius:6px;border:1px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;">
+            <span style="color:rgba(255,255,255,0.5);font-size:9px;letter-spacing:1px;">3 clips</span>
+          </div>
+        </div>
+        <div style="padding:12px 20px;display:flex;justify-content:center;align-items:center;">
+          <div style="width:60px;height:60px;border-radius:50%;border:2px solid rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;">
+            <div style="width:24px;height:24px;background:#e53935;border-radius:50%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Tap clip counter to preview</h3>
+      <p>A subtle "3 clips" indicator on the viewfinder. Tap it to open preview. Record button is the only control at the bottom. Most minimal — but less discoverable.</p>
+    </div>
+  </div>
+</div>
