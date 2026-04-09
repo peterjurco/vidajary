@@ -1,0 +1,16 @@
+# Xcode
+*.xcuserstate
+xcuserdata/
+*.xcscheme
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# SwiftPM
+.build/
+.swiftpm/
+
+# Superpowers brainstorm sessions
+.superpowers/
