@@ -16,9 +16,6 @@ func makeTestVideo(at url: URL, duration: Double = 1.0, testCase: XCTestCase) th
     videoInput.expectsMediaDataInRealTime = false
     writer.add(videoInput)
 
-    writer.startWriting()
-    writer.startSession(atSourceTime: .zero)
-
     let adaptor = AVAssetWriterInputPixelBufferAdaptor(
         assetWriterInput: videoInput,
         sourcePixelBufferAttributes: [
@@ -27,6 +24,9 @@ func makeTestVideo(at url: URL, duration: Double = 1.0, testCase: XCTestCase) th
             kCVPixelBufferHeightKey as String: 240
         ]
     )
+
+    writer.startWriting()
+    writer.startSession(atSourceTime: .zero)
 
     // Create and zero the pixel buffer to avoid undefined content
     var pixelBuffer: CVPixelBuffer?
