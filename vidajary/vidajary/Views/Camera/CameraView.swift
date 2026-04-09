@@ -5,6 +5,7 @@ struct CameraView: View {
     @Environment(\.modelContext) private var context
     var project: Project
     var onShowProjects: () -> Void
+    var onProjectDeleted: () -> Void
 
     @State private var camera = CameraService()
     @State private var showPreview = false
@@ -108,11 +109,14 @@ struct CameraView: View {
             }
         }
         .task { await setupCamera() }
+        .onDisappear {
+            camera.stopSession()
+        }
         .sheet(isPresented: $showPreview) {
             PreviewView(project: project)
         }
         .sheet(isPresented: $showSettings) {
-            ProjectSettingsSheet(project: project, onDeleted: onShowProjects)
+            ProjectSettingsSheet(project: project, onDeleted: onProjectDeleted)
         }
         .sheet(isPresented: $showLibraryPicker) {
             LibraryPickerView { url, duration in

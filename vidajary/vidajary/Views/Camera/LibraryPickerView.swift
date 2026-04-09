@@ -46,11 +46,17 @@ struct LibraryPickerView: UIViewControllerRepresentable {
                     DispatchQueue.main.async { self.onDismissed() }
                     return
                 }
-                let asset = AVURLAsset(url: destination)
-                let duration = asset.duration.seconds
-                DispatchQueue.main.async {
-                    self.onPicked(destination, duration)
-                    self.onDismissed()
+                Task {
+                    do {
+                        let asset = AVURLAsset(url: destination)
+                        let duration = try await asset.load(.duration)
+                        await MainActor.run {
+                            self.onPicked(destination, duration.seconds)
+                            self.onDismissed()
+                        }
+                    } catch {
+                        await MainActor.run { self.onDismissed() }
+                    }
                 }
             }
         }

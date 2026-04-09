@@ -10,9 +10,11 @@ struct ContentView: View {
     var body: some View {
         Group {
             if let project = activeProject {
-                CameraView(project: project) {
+                CameraView(project: project, onShowProjects: {
                     showProjects = true
-                }
+                }, onProjectDeleted: {
+                    activeProject = nil
+                })
                 .sheet(isPresented: $showProjects) {
                     ProjectsView(activeProject: $activeProject)
                 }
@@ -22,6 +24,9 @@ struct ContentView: View {
         }
         .onChange(of: activeProject) { _, newProject in
             lastActiveProjectID = newProject?.id.uuidString ?? ""
+            if newProject != nil {
+                showProjects = false
+            }
         }
         .onAppear {
             if activeProject == nil, !lastActiveProjectID.isEmpty {

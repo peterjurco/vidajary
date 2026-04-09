@@ -68,6 +68,12 @@ final class CameraService: NSObject {
         try configureSession(position: next)
     }
 
+    func stopSession() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.session.stopRunning()
+        }
+    }
+
     func setZoom(_ factor: CGFloat) {
         guard let device = currentDeviceInput?.device else { return }
         do {
