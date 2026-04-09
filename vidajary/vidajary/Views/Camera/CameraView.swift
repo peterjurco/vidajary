@@ -120,6 +120,8 @@ struct CameraView: View {
                 project.clips.append(clip)
                 project.lastRecordedAt = Date()
                 try? context.save()
+            } onDismissed: {
+                showLibraryPicker = false
             }
         }
     }
