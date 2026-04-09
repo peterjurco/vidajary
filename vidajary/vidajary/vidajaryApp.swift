@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct vidajaryApp: App {
+struct VidajaryApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

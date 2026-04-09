@@ -6,6 +6,11 @@ final class ModelTests: XCTestCase {
     var container: ModelContainer!
     var context: ModelContext!
 
+    override func tearDown() async throws {
+        context = nil
+        container = nil
+    }
+
     override func setUp() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         container = try ModelContainer(for: Project.self, Clip.self, configurations: config)
@@ -35,6 +40,7 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(fetched.clips.count, 1)
         XCTAssertEqual(fetched.clips.first?.filename, "abc.mov")
         XCTAssertEqual(fetched.clips.first?.duration, 5.0)
+        XCTAssertNotNil(fetched.clips.first?.recordedAt)
     }
 
     func testDeleteProjectCascadesClips() throws {
