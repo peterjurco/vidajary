@@ -70,9 +70,13 @@ final class CameraService: NSObject {
 
     func setZoom(_ factor: CGFloat) {
         guard let device = currentDeviceInput?.device else { return }
-        try? device.lockForConfiguration()
-        device.videoZoomFactor = max(1.0, min(factor, device.activeFormat.videoMaxZoomFactor))
-        device.unlockForConfiguration()
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = max(1.0, min(factor, device.activeFormat.videoMaxZoomFactor))
+            device.unlockForConfiguration()
+        } catch {
+            return
+        }
     }
 }
 
@@ -83,9 +87,14 @@ extension CameraService: AVCaptureFileOutputRecordingDelegate {
         from connections: [AVCaptureConnection],
         error: Error?
     ) {
-        isRecording = false
-        guard error == nil else { return }
+        guard error == nil else {
+            DispatchQueue.main.async { self.isRecording = false }
+            return
+        }
         let duration = recordingStartTime.map { Date().timeIntervalSince($0) } ?? 0
-        onClipRecorded?(outputFileURL, duration)
+        DispatchQueue.main.async {
+            self.isRecording = false
+            self.onClipRecorded?(outputFileURL, duration)
+        }
     }
 }
