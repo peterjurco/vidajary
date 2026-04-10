@@ -14,6 +14,7 @@ struct PreviewView: View {
     @State private var exportError: String?
     @State private var showLibraryPicker = false
     @State private var isPlaying = false
+    @State private var isLandscapeContent = false
     @State private var thumbnails: [UUID: UIImage] = [:]
 
     var sortedClips: [Clip] {
@@ -122,6 +123,15 @@ struct PreviewView: View {
             }
         }
         .task { await rebuildPlayer() }
+        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { _ in
+            isPlaying = false
+        }
+        .onChange(of: isLandscapeContent) { _, landscape in
+            applyOrientation(landscape: landscape)
+        }
+        .onDisappear {
+            applyOrientation(landscape: false)
+        }
         .alert("Saved to Library", isPresented: $showExportSuccess) {
             Button("OK") {}
         }
@@ -156,6 +166,11 @@ struct PreviewView: View {
             item.videoComposition = result.videoComposition
             player = AVPlayer(playerItem: item)
             isPlaying = false
+            if let renderSize = result.videoComposition?.renderSize {
+                isLandscapeContent = renderSize.width > renderSize.height
+            } else {
+                isLandscapeContent = false
+            }
         } catch {
             exportError = error.localizedDescription
         }
@@ -211,5 +226,13 @@ struct PreviewView: View {
 
     private func formattedDuration(_ seconds: TimeInterval) -> String {
         String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
+    }
+
+    private func applyOrientation(landscape: Bool) {
+        AppDelegate.orientationMask = landscape ? [.portrait, .landscapeLeft, .landscapeRight] : .portrait
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+        let orientations: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
+        windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { _ in }
+        windowScene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
     }
 }

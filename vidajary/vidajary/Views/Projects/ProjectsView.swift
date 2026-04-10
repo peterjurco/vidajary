@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AVFoundation
 
 struct ProjectsView: View {
     @Environment(\.modelContext) private var context
@@ -8,12 +9,27 @@ struct ProjectsView: View {
     @Binding var activeProject: Project?
     @State private var showNewProject = false
     @State private var projectForSettings: Project? = nil
+    @State private var projectThumbnails: [UUID: UIImage] = [:]
 
     var body: some View {
         NavigationStack {
             List {
                 ForEach(projects) { project in
                     HStack {
+                        // Thumbnail
+                        if let thumbnail = projectThumbnails[project.id] {
+                            Image(uiImage: thumbnail)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 56, height: 40)
+                                .clipped()
+                                .cornerRadius(4)
+                        } else if !project.clips.isEmpty {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 56, height: 40)
+                        }
+
                         Button {
                             activeProject = project
                             dismiss()
@@ -42,6 +58,9 @@ struct ProjectsView: View {
                     }
                 }
                 .onDelete(perform: deleteProjects)
+            }
+            .task {
+                await loadThumbnails()
             }
             .navigationTitle("Projects")
             .toolbar {
@@ -75,6 +94,24 @@ struct ProjectsView: View {
                 try? FileManager.default.removeItem(at: dir.appendingPathComponent(clip.filename))
             }
             context.delete(project)
+        }
+    }
+
+    private func loadThumbnails() async {
+        let dir = clipsDirectory()
+        for project in projects {
+            guard let firstClip = project.clips.min(by: { $0.recordedAt < $1.recordedAt }) else { continue }
+            let url = dir.appendingPathComponent(firstClip.filename)
+            let asset = AVURLAsset(url: url)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 120, height: 80)
+            do {
+                let (cgImage, _) = try await generator.image(at: .zero)
+                projectThumbnails[project.id] = UIImage(cgImage: cgImage)
+            } catch {
+                // No thumbnail for this project
+            }
         }
     }
 
