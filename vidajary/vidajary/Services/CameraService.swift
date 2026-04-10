@@ -1,4 +1,5 @@
 import AVFoundation
+import UIKit
 
 @Observable
 final class CameraService: NSObject {
@@ -21,6 +22,7 @@ final class CameraService: NSObject {
         guard !session.isRunning else { return }
         guard await AVCaptureDevice.requestAccess(for: .video) else { throw CameraError.accessDenied }
         guard await AVCaptureDevice.requestAccess(for: .audio) else { throw CameraError.accessDenied }
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         try configureSession(position: .back)
         DispatchQueue.global(qos: .userInitiated).async { self.session.startRunning() }
     }
@@ -62,6 +64,18 @@ final class CameraService: NSObject {
 
     func startRecording(to url: URL) {
         guard !isRecording else { return }
+        if let connection = movieOutput.connection(with: .video) {
+            let angle: CGFloat
+            switch UIDevice.current.orientation {
+            case .landscapeLeft:        angle = 0
+            case .landscapeRight:       angle = 180
+            case .portraitUpsideDown:   angle = 270
+            default:                    angle = 90
+            }
+            if connection.isVideoRotationAngleSupported(angle) {
+                connection.videoRotationAngle = angle
+            }
+        }
         movieOutput.startRecording(to: url, recordingDelegate: self)
         recordingStartTime = Date()
         isRecording = true
@@ -78,6 +92,7 @@ final class CameraService: NSObject {
     }
 
     func stopSession() {
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
         DispatchQueue.global(qos: .userInitiated).async {
             self.session.stopRunning()
         }
