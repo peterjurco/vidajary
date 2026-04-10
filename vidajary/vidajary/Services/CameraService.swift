@@ -65,10 +65,11 @@ final class CameraService: NSObject {
     func startRecording(to url: URL) {
         guard !isRecording else { return }
         if let connection = movieOutput.connection(with: .video) {
+            let isFront = currentPosition == .front
             let angle: CGFloat
             switch UIDevice.current.orientation {
-            case .landscapeLeft:        angle = 0
-            case .landscapeRight:       angle = 180
+            case .landscapeLeft:        angle = isFront ? 180 : 0
+            case .landscapeRight:       angle = isFront ? 0 : 180
             case .portraitUpsideDown:   angle = 270
             default:                    angle = 90
             }
