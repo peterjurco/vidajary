@@ -223,46 +223,29 @@ struct PreviewView: View {
     }
 
     private func detectOrientationFromFirstClip() async {
-        guard let firstClip = sortedClips.first else {
-            print("[Orientation] No clips found")
-            return
-        }
+        guard let firstClip = sortedClips.first else { return }
         let url = clipsDirectory().appendingPathComponent(firstClip.filename)
-        print("[Orientation] Reading clip: \(url.lastPathComponent)")
         let asset = AVURLAsset(url: url)
-        guard let track = try? await asset.loadTracks(withMediaType: .video).first else {
-            print("[Orientation] No video track found")
-            return
-        }
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return }
         let transform = (try? await track.load(.preferredTransform)) ?? .identity
         let naturalSize = (try? await track.load(.naturalSize)) ?? .zero
         let isRotated = abs(transform.b) > 0.5
         let orientedWidth = isRotated ? naturalSize.height : naturalSize.width
         let orientedHeight = isRotated ? naturalSize.width : naturalSize.height
-        let isLandscape = orientedWidth > orientedHeight
-        print("[Orientation] naturalSize=\(naturalSize) transform=(a:\(transform.a) b:\(transform.b) c:\(transform.c) d:\(transform.d) tx:\(transform.tx) ty:\(transform.ty)) isRotated=\(isRotated) orientedSize=\(orientedWidth)x\(orientedHeight) isLandscape=\(isLandscape)")
-        applyOrientation(landscape: isLandscape)
+        applyOrientation(landscape: orientedWidth > orientedHeight)
     }
 
     private func applyOrientation(landscape: Bool) {
         AppDelegate.orientationMask = landscape ? [.portrait, .landscapeLeft, .landscapeRight] : .portrait
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else {
-            print("[Orientation] No window scene found")
-            return
-        }
-        var vcCount = 0
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
         windowScene.windows.forEach { window in
             var vc: UIViewController? = window.rootViewController
             while let current = vc {
                 current.setNeedsUpdateOfSupportedInterfaceOrientations()
-                vcCount += 1
                 vc = current.presentedViewController
             }
         }
         let orientations: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
-        print("[Orientation] applyOrientation landscape=\(landscape), notified \(vcCount) VCs, requesting \(landscape ? "landscape" : "portrait")")
-        windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { error in
-            print("[Orientation] requestGeometryUpdate error: \(error)")
-        }
+        windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { _ in }
     }
 }
