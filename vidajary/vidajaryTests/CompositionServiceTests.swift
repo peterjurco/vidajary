@@ -16,15 +16,15 @@ final class CompositionServiceTests: XCTestCase {
             try? FileManager.default.removeItem(at: url2)
         }
 
-        let composition = try await CompositionService.buildComposition(from: [url1, url2])
+        let result = try await CompositionService.buildComposition(from: [url1, url2])
 
-        XCTAssertEqual(composition.duration.seconds, 3.0, accuracy: 0.2)
-        XCTAssertFalse(composition.tracks(withMediaType: .video).isEmpty)
+        XCTAssertEqual(result.composition.duration.seconds, 3.0, accuracy: 0.2)
+        XCTAssertFalse(result.composition.tracks(withMediaType: .video).isEmpty)
     }
 
     func testEmptyClipsReturnsEmptyComposition() async throws {
-        let composition = try await CompositionService.buildComposition(from: [])
-        XCTAssertEqual(composition.duration.seconds, 0.0, accuracy: 0.01)
+        let result = try await CompositionService.buildComposition(from: [])
+        XCTAssertEqual(result.composition.duration.seconds, 0.0, accuracy: 0.01)
     }
 
     func testBuildCompositionFromClipModelsOrdersByRecordedAt() async throws {
@@ -45,11 +45,11 @@ final class CompositionServiceTests: XCTestCase {
         clip2.recordedAt = Date(timeIntervalSince1970: 1000) // earlier
 
         // Pass them in reversed order — composition should sort and put clip2 first
-        let composition = try await CompositionService.buildComposition(
+        let result = try await CompositionService.buildComposition(
             from: [clip1, clip2],
             in: dir
         )
         // Total duration should still be 3s regardless of order
-        XCTAssertEqual(composition.duration.seconds, 3.0, accuracy: 0.2)
+        XCTAssertEqual(result.composition.duration.seconds, 3.0, accuracy: 0.2)
     }
 }

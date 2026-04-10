@@ -18,7 +18,7 @@ enum ExportService {
     }
 
     /// Exports the composition to a file at `outputURL`.
-    static func export(composition: AVMutableComposition, to outputURL: URL) async throws {
+    static func export(composition: AVMutableComposition, videoComposition: AVMutableVideoComposition? = nil, to outputURL: URL) async throws {
         guard let session = AVAssetExportSession(
             asset: composition,
             presetName: AVAssetExportPresetHighestQuality
@@ -27,6 +27,7 @@ enum ExportService {
         session.outputURL = outputURL
         session.outputFileType = .mov
         session.shouldOptimizeForNetworkUse = false
+        session.videoComposition = videoComposition
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             session.exportAsynchronously { continuation.resume() }

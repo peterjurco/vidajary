@@ -10,12 +10,12 @@ final class ExportServiceTests: XCTestCase {
         try makeTestVideo(at: inputURL, duration: 1.0, testCase: self)
         defer { try? FileManager.default.removeItem(at: inputURL) }
 
-        let composition = try await CompositionService.buildComposition(from: [inputURL])
+        let result = try await CompositionService.buildComposition(from: [inputURL])
 
         let outputURL = dir.appendingPathComponent(UUID().uuidString + ".mov")
         defer { try? FileManager.default.removeItem(at: outputURL) }
 
-        try await ExportService.export(composition: composition, to: outputURL)
+        try await ExportService.export(composition: result.composition, videoComposition: result.videoComposition, to: outputURL)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
         let asset = AVURLAsset(url: outputURL)

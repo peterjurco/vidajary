@@ -111,7 +111,7 @@ struct CameraView: View {
                 .padding(.bottom, 44)
             }
         }
-        .task { await setupCamera() }
+        .task(id: project.id) { await setupCamera() }
         .onDisappear {
             camera.stopSession()
         }

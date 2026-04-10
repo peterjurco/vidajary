@@ -3,28 +3,43 @@ import SwiftData
 
 struct ProjectsView: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
     @Query(sort: \Project.createdAt, order: .reverse) private var projects: [Project]
     @Binding var activeProject: Project?
     @State private var showNewProject = false
+    @State private var projectForSettings: Project? = nil
 
     var body: some View {
         NavigationStack {
             List {
                 ForEach(projects) { project in
-                    Button {
-                        activeProject = project
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(project.name)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                            Text("\(project.clips.count) clips · \(formattedDuration(project.totalDuration))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    HStack {
+                        Button {
+                            activeProject = project
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(project.name)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text("\(project.clips.count) clips · \(formattedDuration(project.totalDuration))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .padding(.vertical, 4)
+                        .buttonStyle(.plain)
+
+                        Button {
+                            projectForSettings = project
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
                 .onDelete(perform: deleteProjects)
             }
@@ -40,6 +55,14 @@ struct ProjectsView: View {
                 NewProjectSheet { project in
                     activeProject = project
                 }
+            }
+            .sheet(item: $projectForSettings) { project in
+                ProjectSettingsSheet(project: project, onDeleted: {
+                    if activeProject?.id == project.id {
+                        activeProject = nil
+                    }
+                    projectForSettings = nil
+                })
             }
         }
     }

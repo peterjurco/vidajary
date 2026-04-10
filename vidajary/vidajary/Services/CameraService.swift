@@ -18,6 +18,7 @@ final class CameraService: NSObject {
     }
 
     func setup() async throws {
+        guard !session.isRunning else { return }
         guard await AVCaptureDevice.requestAccess(for: .video) else { throw CameraError.accessDenied }
         guard await AVCaptureDevice.requestAccess(for: .audio) else { throw CameraError.accessDenied }
         try configureSession(position: .back)

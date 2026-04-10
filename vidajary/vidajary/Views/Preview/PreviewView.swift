@@ -148,11 +148,13 @@ struct PreviewView: View {
 
     private func rebuildPlayer() async {
         do {
-            let composition = try await CompositionService.buildComposition(
+            let result = try await CompositionService.buildComposition(
                 from: sortedClips,
                 in: clipsDirectory()
             )
-            player = AVPlayer(playerItem: AVPlayerItem(asset: composition))
+            let item = AVPlayerItem(asset: result.composition)
+            item.videoComposition = result.videoComposition
+            player = AVPlayer(playerItem: item)
             isPlaying = false
         } catch {
             exportError = error.localizedDescription
@@ -181,13 +183,13 @@ struct PreviewView: View {
         isExporting = true
         defer { isExporting = false }
         do {
-            let composition = try await CompositionService.buildComposition(
+            let result = try await CompositionService.buildComposition(
                 from: sortedClips,
                 in: clipsDirectory()
             )
             let tmp = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString + ".mov")
-            try await ExportService.export(composition: composition, to: tmp)
+            try await ExportService.export(composition: result.composition, videoComposition: result.videoComposition, to: tmp)
             try await ExportService.saveToPhotoLibrary(url: tmp)
             try? FileManager.default.removeItem(at: tmp)
             showExportSuccess = true
