@@ -10,7 +10,6 @@ struct CameraView: View {
     @State private var camera = CameraService()
     @State private var showPreview = false
     @State private var showSettings = false
-    @State private var showLibraryPicker = false
     @State private var lastZoomScale: CGFloat = 1.0
 
     var body: some View {
@@ -24,26 +23,24 @@ struct CameraView: View {
                             camera.setZoom(lastZoomScale * scale)
                         }
                         .onEnded { scale in
-                            lastZoomScale = max(1.0, lastZoomScale * scale)
+                            lastZoomScale = max(camera.minZoomFactor, min(lastZoomScale * scale, 10.0))
                         }
                 )
 
             VStack {
                 // Top bar
                 HStack {
-                    Button { onShowProjects() } label: {
-                        Text(project.name.uppercased())
-                            .font(.system(size: 11, weight: .regular))
-                            .kerning(3)
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                    .onLongPressGesture { showSettings = true }
+                    Text(project.name.uppercased())
+                        .font(.system(size: 11, weight: .regular))
+                        .kerning(3)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .onLongPressGesture { showSettings = true }
 
                     Spacer()
 
                     HStack(spacing: 20) {
-                        Button { showLibraryPicker = true } label: {
-                            Image(systemName: "plus.circle")
+                        Button { onShowProjects() } label: {
+                            Image(systemName: "square.grid.2x2")
                                 .font(.system(size: 20))
                                 .foregroundStyle(.white.opacity(0.6))
                         }
@@ -96,11 +93,17 @@ struct CameraView: View {
                             Circle()
                                 .stroke(.white.opacity(0.4), lineWidth: 2)
                                 .frame(width: 64, height: 64)
-                            Circle()
-                                .fill(.red)
-                                .frame(width: camera.isRecording ? 28 : 26)
-                                .animation(.easeInOut(duration: 0.15), value: camera.isRecording)
+                            if camera.isRecording {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(.white)
+                                    .frame(width: 28, height: 28)
+                            } else {
+                                Circle()
+                                    .fill(.red)
+                                    .frame(width: 50, height: 50)
+                            }
                         }
+                        .animation(.easeInOut(duration: 0.15), value: camera.isRecording)
                     }
 
                     Color.clear.frame(width: 44, height: 44)
@@ -112,21 +115,11 @@ struct CameraView: View {
         .onDisappear {
             camera.stopSession()
         }
-        .sheet(isPresented: $showPreview) {
+        .fullScreenCover(isPresented: $showPreview) {
             PreviewView(project: project)
         }
         .sheet(isPresented: $showSettings) {
             ProjectSettingsSheet(project: project, onDeleted: onProjectDeleted)
-        }
-        .sheet(isPresented: $showLibraryPicker) {
-            LibraryPickerView { url, duration in
-                let clip = Clip(filename: url.lastPathComponent, duration: duration)
-                project.clips.append(clip)
-                project.lastRecordedAt = Date()
-                try? context.save()
-            } onDismissed: {
-                showLibraryPicker = false
-            }
         }
     }
 

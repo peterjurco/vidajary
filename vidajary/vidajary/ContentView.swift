@@ -15,7 +15,7 @@ struct ContentView: View {
                 }, onProjectDeleted: {
                     activeProject = nil
                 })
-                .sheet(isPresented: $showProjects) {
+                .fullScreenCover(isPresented: $showProjects) {
                     ProjectsView(activeProject: $activeProject)
                 }
             } else {

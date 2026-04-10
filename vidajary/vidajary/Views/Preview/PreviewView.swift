@@ -12,6 +12,9 @@ struct PreviewView: View {
     @State private var isExporting = false
     @State private var showExportSuccess = false
     @State private var exportError: String?
+    @State private var showLibraryPicker = false
+    @State private var isPlaying = false
+    @State private var thumbnails: [UUID: UIImage] = [:]
 
     var sortedClips: [Clip] {
         project.clips.sorted { $0.recordedAt < $1.recordedAt }
@@ -30,21 +33,55 @@ struct PreviewView: View {
                             .frame(width: 44, height: 44)
                     }
                     Spacer()
+                    Button { showLibraryPicker = true } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
                 }
                 .padding(.horizontal, 12)
 
-                if let player {
-                    VideoPlayer(player: player)
-                        .frame(maxHeight: .infinity)
-                } else {
-                    ProgressView().tint(.white).frame(maxHeight: .infinity)
+                ZStack {
+                    if let player {
+                        VideoPlayer(player: player)
+                            .frame(maxHeight: .infinity)
+                    } else {
+                        ProgressView().tint(.white).frame(maxHeight: .infinity)
+                    }
+
+                    if !isPlaying {
+                        Button {
+                            player?.play()
+                            isPlaying = true
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(.black.opacity(0.4))
+                                    .frame(width: 64, height: 64)
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 26))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                    }
                 }
 
                 // Clip list with swipe-to-delete
                 List {
                     ForEach(sortedClips) { clip in
                         HStack {
-                            Image(systemName: "video.fill").foregroundStyle(.secondary)
+                            if let thumbnail = thumbnails[clip.id] {
+                                Image(uiImage: thumbnail)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 60, height: 40)
+                                    .clipped()
+                                    .cornerRadius(4)
+                            } else {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: 60, height: 40)
+                            }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(clip.recordedAt.formatted(date: .abbreviated, time: .shortened))
                                     .font(.subheadline)
@@ -96,6 +133,17 @@ struct PreviewView: View {
         } message: {
             Text(exportError ?? "")
         }
+        .sheet(isPresented: $showLibraryPicker) {
+            LibraryPickerView { url, duration in
+                let clip = Clip(filename: url.lastPathComponent, duration: duration)
+                project.clips.append(clip)
+                project.lastRecordedAt = Date()
+                try? context.save()
+                Task { await rebuildPlayer() }
+            } onDismissed: {
+                showLibraryPicker = false
+            }
+        }
     }
 
     private func rebuildPlayer() async {
@@ -105,8 +153,27 @@ struct PreviewView: View {
                 in: clipsDirectory()
             )
             player = AVPlayer(playerItem: AVPlayerItem(asset: composition))
+            isPlaying = false
         } catch {
             exportError = error.localizedDescription
+        }
+        await loadThumbnails()
+    }
+
+    private func loadThumbnails() async {
+        let dir = clipsDirectory()
+        for clip in sortedClips {
+            let url = dir.appendingPathComponent(clip.filename)
+            let asset = AVURLAsset(url: url)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 120, height: 80)
+            do {
+                let (cgImage, _) = try await generator.image(at: .zero)
+                thumbnails[clip.id] = UIImage(cgImage: cgImage)
+            } catch {
+                // Skip clips where thumbnail generation fails
+            }
         }
     }
 

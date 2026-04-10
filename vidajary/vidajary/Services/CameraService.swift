@@ -30,8 +30,16 @@ final class CameraService: NSObject {
 
         session.inputs.forEach { session.removeInput($0) }
 
+        let videoDevice: AVCaptureDevice?
+        if position == .back {
+            videoDevice = AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back)
+                ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+        } else {
+            videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+        }
+
         guard
-            let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
+            let videoDevice,
             let videoInput = try? AVCaptureDeviceInput(device: videoDevice),
             session.canAddInput(videoInput)
         else { throw CameraError.deviceUnavailable }
@@ -74,11 +82,15 @@ final class CameraService: NSObject {
         }
     }
 
+    var minZoomFactor: CGFloat {
+        currentDeviceInput?.device.minAvailableVideoZoomFactor ?? 1.0
+    }
+
     func setZoom(_ factor: CGFloat) {
         guard let device = currentDeviceInput?.device else { return }
         do {
             try device.lockForConfiguration()
-            device.videoZoomFactor = max(1.0, min(factor, device.activeFormat.videoMaxZoomFactor))
+            device.videoZoomFactor = max(device.minAvailableVideoZoomFactor, min(factor, device.activeFormat.videoMaxZoomFactor))
             device.unlockForConfiguration()
         } catch {
             return
