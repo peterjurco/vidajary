@@ -14,7 +14,6 @@ struct PreviewView: View {
     @State private var exportError: String?
     @State private var showLibraryPicker = false
     @State private var isPlaying = false
-    @State private var isLandscapeContent = false
     @State private var thumbnails: [UUID: UIImage] = [:]
 
     var sortedClips: [Clip] {
@@ -123,11 +122,11 @@ struct PreviewView: View {
             }
         }
         .task { await rebuildPlayer() }
+        .onAppear {
+            Task { await detectOrientationFromFirstClip() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { _ in
             isPlaying = false
-        }
-        .onChange(of: isLandscapeContent) { _, landscape in
-            applyOrientation(landscape: landscape)
         }
         .onDisappear {
             applyOrientation(landscape: false)
@@ -166,11 +165,6 @@ struct PreviewView: View {
             item.videoComposition = result.videoComposition
             player = AVPlayer(playerItem: item)
             isPlaying = false
-            if let renderSize = result.videoComposition?.renderSize {
-                isLandscapeContent = renderSize.width > renderSize.height
-            } else {
-                isLandscapeContent = false
-            }
         } catch {
             exportError = error.localizedDescription
         }
@@ -228,11 +222,31 @@ struct PreviewView: View {
         String(format: "%d:%02d", Int(seconds) / 60, Int(seconds) % 60)
     }
 
+    private func detectOrientationFromFirstClip() async {
+        guard let firstClip = sortedClips.first else { return }
+        let url = clipsDirectory().appendingPathComponent(firstClip.filename)
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first else { return }
+        let transform = (try? await track.load(.preferredTransform)) ?? .identity
+        let naturalSize = (try? await track.load(.naturalSize)) ?? .zero
+        let isRotated = abs(transform.b) > 0.5
+        let orientedWidth = isRotated ? naturalSize.height : naturalSize.width
+        let orientedHeight = isRotated ? naturalSize.width : naturalSize.height
+        applyOrientation(landscape: orientedWidth > orientedHeight)
+    }
+
     private func applyOrientation(landscape: Bool) {
         AppDelegate.orientationMask = landscape ? [.portrait, .landscapeLeft, .landscapeRight] : .portrait
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+        // Notify entire VC hierarchy — system checks the topmost presented VC, not just root
+        windowScene.windows.forEach { window in
+            var vc: UIViewController? = window.rootViewController
+            while let current = vc {
+                current.setNeedsUpdateOfSupportedInterfaceOrientations()
+                vc = current.presentedViewController
+            }
+        }
         let orientations: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
         windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { _ in }
-        windowScene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
     }
 }
