@@ -15,6 +15,7 @@ struct PreviewView: View {
     @State private var showLibraryPicker = false
     @State private var isPlaying = false
     @State private var thumbnails: [UUID: UIImage] = [:]
+    @State private var isEditing = false
 
     var sortedClips: [Clip] {
         project.clips.sorted { $0.sortOrder < $1.sortOrder }
@@ -33,6 +34,11 @@ struct PreviewView: View {
                             .frame(width: 44, height: 44)
                     }
                     Spacer()
+                    Button { isEditing.toggle() } label: {
+                        Image(systemName: isEditing ? "checkmark.circle" : "arrow.up.arrow.down")
+                            .font(.system(size: 20))
+                            .foregroundStyle(isEditing ? .white : .white.opacity(0.6))
+                    }
                     Button { showLibraryPicker = true } label: {
                         Image(systemName: "plus.circle")
                             .font(.system(size: 20))
@@ -93,11 +99,13 @@ struct PreviewView: View {
                         .foregroundStyle(.white)
                     }
                     .onDelete(perform: deleteClips)
+                    .onMove(perform: reorderClips)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
                 .background(Color.black)
                 .frame(maxHeight: 200)
+                .environment(\.editMode, .constant(isEditing ? .active : .inactive))
 
                 Button {
                     Task { await exportVideo() }
@@ -121,7 +129,10 @@ struct PreviewView: View {
                 .disabled(isExporting || sortedClips.isEmpty)
             }
         }
-        .task { await rebuildPlayer() }
+        .task {
+            initializeSortOrdersIfNeeded()
+            await rebuildPlayer()
+        }
         .onAppear {
             Task { await detectOrientationFromFirstClip() }
         }
@@ -144,7 +155,7 @@ struct PreviewView: View {
         }
         .sheet(isPresented: $showLibraryPicker) {
             LibraryPickerView { url, duration in
-                let clip = Clip(filename: url.lastPathComponent, duration: duration)
+                let clip = Clip(filename: url.lastPathComponent, duration: duration, sortOrder: project.clips.count)
                 project.clips.append(clip)
                 project.lastRecordedAt = Date()
                 try? context.save()
@@ -219,6 +230,26 @@ struct PreviewView: View {
         } catch {
             exportError = error.localizedDescription
         }
+    }
+
+    private func initializeSortOrdersIfNeeded() {
+        guard project.clips.count > 1,
+              project.clips.allSatisfy({ $0.sortOrder == 0 }) else { return }
+        let sorted = project.clips.sorted { $0.recordedAt < $1.recordedAt }
+        for (i, clip) in sorted.enumerated() {
+            clip.sortOrder = i
+        }
+        try? context.save()
+    }
+
+    private func reorderClips(from source: IndexSet, to destination: Int) {
+        var clips = sortedClips
+        clips.move(fromOffsets: source, toOffset: destination)
+        for (index, clip) in clips.enumerated() {
+            clip.sortOrder = index
+        }
+        try? context.save()
+        Task { await rebuildPlayer() }
     }
 
     private func deleteClips(at offsets: IndexSet) {
