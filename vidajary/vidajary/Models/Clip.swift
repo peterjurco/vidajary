@@ -13,10 +13,10 @@ final class Clip {
     var recordedAt: Date
     var duration: TimeInterval
     var project: Project?
-    var sortOrder: Int
-    var rotationOverride: Int   // 0, 90, 180, or 270
-    var trimStart: TimeInterval // seconds from clip start; 0 = no trim
-    var trimEnd: TimeInterval   // seconds from clip start; 0 = use full duration
+    var sortOrder: Int = 0
+    var rotationOverride: Int = 0   // 0, 90, 180, or 270
+    var trimStart: TimeInterval = 0 // seconds from clip start; 0 = no trim
+    var trimEnd: TimeInterval = 0   // seconds from clip start; 0 = use full duration
 
     init(filename: String, duration: TimeInterval, sortOrder: Int = 0) {
         self.id = UUID()

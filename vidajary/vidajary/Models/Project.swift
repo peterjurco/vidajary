@@ -14,8 +14,8 @@ final class Project {
     var lastRecordedAt: Date?
     var saveClipsToLibrary: Bool
     var musicFilename: String?
-    var musicVolume: Float
-    var videoVolume: Float
+    var musicVolume: Float = 1.0
+    var videoVolume: Float = 1.0
     @Relationship(deleteRule: .cascade, inverse: \Clip.project) var clips: [Clip]
 
     init(name: String) {
