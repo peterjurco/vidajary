@@ -95,6 +95,16 @@ struct PreviewView: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
+                            Spacer()
+                            Button {
+                                rotateClip(clip)
+                            } label: {
+                                Image(systemName: "rotate.right")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                    .frame(width: 36, height: 44)
+                            }
+                            .buttonStyle(.plain)
                         }
                         .foregroundStyle(.white)
                     }
@@ -259,6 +269,12 @@ struct PreviewView: View {
             try? FileManager.default.removeItem(at: dir.appendingPathComponent(clip.filename))
             project.clips.removeAll { $0.id == clip.id }
         }
+        try? context.save()
+        Task { await rebuildPlayer() }
+    }
+
+    private func rotateClip(_ clip: Clip) {
+        clip.rotationOverride = (clip.rotationOverride + 90) % 360
         try? context.save()
         Task { await rebuildPlayer() }
     }
