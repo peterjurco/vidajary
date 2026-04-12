@@ -293,7 +293,10 @@ struct PreviewView: View {
     }
 
     private func importMusic(from url: URL) {
-        _ = url.startAccessingSecurityScopedResource()
+        guard url.startAccessingSecurityScopedResource() else {
+            exportError = "Could not access the selected file."
+            return
+        }
         defer { url.stopAccessingSecurityScopedResource() }
         let filename = UUID().uuidString + "." + url.pathExtension
         let dest = clipsDirectory().appendingPathComponent(filename)
