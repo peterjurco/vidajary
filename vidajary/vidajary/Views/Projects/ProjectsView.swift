@@ -10,6 +10,7 @@ struct ProjectsView: View {
     @State private var showNewProject = false
     @State private var projectForSettings: Project? = nil
     @State private var projectThumbnails: [UUID: UIImage] = [:]
+    @State private var projectForPreview: Project? = nil
 
     var body: some View {
         NavigationStack {
@@ -48,6 +49,16 @@ struct ProjectsView: View {
                         .buttonStyle(.plain)
 
                         Button {
+                            projectForPreview = project
+                        } label: {
+                            Image(systemName: "play.circle")
+                                .foregroundStyle(.secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(project.clips.isEmpty)
+
+                        Button {
                             projectForSettings = project
                         } label: {
                             Image(systemName: "gearshape")
@@ -82,6 +93,9 @@ struct ProjectsView: View {
                     }
                     projectForSettings = nil
                 })
+            }
+            .fullScreenCover(item: $projectForPreview) { project in
+                PreviewView(project: project)
             }
         }
     }

@@ -41,12 +41,12 @@ struct CameraView: View {
                     HStack(spacing: 20) {
                         Button { onShowProjects() } label: {
                             Image(systemName: "square.grid.2x2")
-                                .font(.system(size: 20))
+                                .font(.system(size: 26))
                                 .foregroundStyle(.white.opacity(0.6))
                         }
                         Button { showPreview = true } label: {
                             Image(systemName: "play.circle")
-                                .font(.system(size: 20))
+                                .font(.system(size: 26))
                                 .foregroundStyle(.white.opacity(0.6))
                         }
                         .disabled(project.clips.isEmpty)
