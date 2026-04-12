@@ -15,12 +15,13 @@ struct ClipTrimView: View {
     @State private var localTrimStart: TimeInterval
     @State private var localTrimEnd: TimeInterval
     @State private var isPlaying = false
+    @State private var playerItem: AVPlayerItem?
 
     init(clip: Clip, clipURL: URL) {
         self.clip = clip
         self.clipURL = clipURL
         _localTrimStart = State(initialValue: clip.trimStart)
-        _localTrimEnd = State(initialValue: clip.trimEnd > 0 ? clip.trimEnd : clip.duration)
+        _localTrimEnd = State(initialValue: min(clip.duration, clip.trimEnd > 0 ? clip.trimEnd : clip.duration))
     }
 
     var body: some View {
@@ -158,12 +159,21 @@ struct ClipTrimView: View {
         .task {
             let asset = AVURLAsset(url: clipURL)
             let item = AVPlayerItem(asset: asset)
+            playerItem = item
             player = AVPlayer(playerItem: item)
             player?.seek(to: CMTimeMakeWithSeconds(localTrimStart, preferredTimescale: 600))
             await loadFilmstrip(asset: asset)
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { _ in
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: AVPlayerItem.didPlayToEndTimeNotification,
+                object: playerItem
+            )
+        ) { _ in
             isPlaying = false
+        }
+        .onDisappear {
+            player?.pause()
         }
     }
 
