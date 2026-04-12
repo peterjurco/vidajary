@@ -2,6 +2,7 @@ import SwiftUI
 import AVKit
 import AVFoundation
 import SwiftData
+import UniformTypeIdentifiers
 
 struct PreviewView: View {
     @Environment(\.modelContext) private var context
@@ -13,6 +14,7 @@ struct PreviewView: View {
     @State private var showExportSuccess = false
     @State private var exportError: String?
     @State private var showLibraryPicker = false
+    @State private var showMusicPicker = false
     @State private var isPlaying = false
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var isEditing = false
@@ -127,6 +129,83 @@ struct PreviewView: View {
                 .frame(maxHeight: 200)
                 .environment(\.editMode, .constant(isEditing ? .active : .inactive))
 
+                // Audio controls
+                VStack(spacing: 10) {
+                    HStack {
+                        Image(systemName: "music.note")
+                            .foregroundStyle(.white.opacity(0.6))
+                            .frame(width: 20)
+                        if let musicName = project.musicFilename {
+                            Text(musicName.prefix(30) + (musicName.count > 30 ? "…" : ""))
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                                .lineLimit(1)
+                            Spacer()
+                            Button { removeMusic() } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.white.opacity(0.5))
+                            }
+                        } else {
+                            Button("Add Music") {
+                                showMusicPicker = true
+                            }
+                            .font(.system(size: 14))
+                            .foregroundStyle(.white.opacity(0.7))
+                            Spacer()
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .foregroundStyle(.white.opacity(0.6))
+                            .frame(width: 20)
+                        Text("Video")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.6))
+                            .frame(width: 36, alignment: .leading)
+                        Slider(value: Binding(
+                            get: { Double(project.videoVolume) },
+                            set: { project.videoVolume = Float($0) }
+                        ), in: 0...1)
+                        .tint(.white)
+                        .onChange(of: project.videoVolume) { _, _ in
+                            try? context.save()
+                            Task { await rebuildPlayer() }
+                        }
+                        Text("\(Int(project.videoVolume * 100))%")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.5))
+                            .frame(width: 36, alignment: .trailing)
+                    }
+
+                    if project.musicFilename != nil {
+                        HStack(spacing: 8) {
+                            Image(systemName: "music.note")
+                                .foregroundStyle(.white.opacity(0.6))
+                                .frame(width: 20)
+                            Text("Music")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.6))
+                                .frame(width: 36, alignment: .leading)
+                            Slider(value: Binding(
+                                get: { Double(project.musicVolume) },
+                                set: { project.musicVolume = Float($0) }
+                            ), in: 0...1)
+                            .tint(.white)
+                            .onChange(of: project.musicVolume) { _, _ in
+                                try? context.save()
+                                Task { await rebuildPlayer() }
+                            }
+                            Text("\(Int(project.musicVolume * 100))%")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.5))
+                                .frame(width: 36, alignment: .trailing)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 8)
+
                 Button {
                     Task { await exportVideo() }
                 } label: {
@@ -182,6 +261,14 @@ struct PreviewView: View {
                 Task { await rebuildPlayer() }
             }
         }
+        .fileImporter(isPresented: $showMusicPicker, allowedContentTypes: [.audio]) { result in
+            switch result {
+            case .success(let url):
+                importMusic(from: url)
+            case .failure(let error):
+                exportError = error.localizedDescription
+            }
+        }
         .sheet(isPresented: $showLibraryPicker) {
             LibraryPickerView { url, duration in
                 let clip = Clip(filename: url.lastPathComponent, duration: duration, sortOrder: project.clips.count)
@@ -193,6 +280,34 @@ struct PreviewView: View {
                 showLibraryPicker = false
             }
         }
+    }
+
+    private func importMusic(from url: URL) {
+        _ = url.startAccessingSecurityScopedResource()
+        defer { url.stopAccessingSecurityScopedResource() }
+        let filename = UUID().uuidString + "." + url.pathExtension
+        let dest = clipsDirectory().appendingPathComponent(filename)
+        do {
+            try FileManager.default.copyItem(at: url, to: dest)
+        } catch {
+            exportError = "Failed to import music: \(error.localizedDescription)"
+            return
+        }
+        if let old = project.musicFilename {
+            try? FileManager.default.removeItem(at: clipsDirectory().appendingPathComponent(old))
+        }
+        project.musicFilename = filename
+        try? context.save()
+        Task { await rebuildPlayer() }
+    }
+
+    private func removeMusic() {
+        if let old = project.musicFilename {
+            try? FileManager.default.removeItem(at: clipsDirectory().appendingPathComponent(old))
+        }
+        project.musicFilename = nil
+        try? context.save()
+        Task { await rebuildPlayer() }
     }
 
     private func rebuildPlayer() async {
