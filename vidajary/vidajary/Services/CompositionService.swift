@@ -159,7 +159,7 @@ enum CompositionService {
                 let mt = composition.addMutableTrack(
                     withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
                 )
-                try? mt?.insertTimeRange(
+                try mt?.insertTimeRange(
                     CMTimeRange(start: .zero, duration: effectiveMusicDuration),
                     of: srcMusic, at: .zero
                 )
@@ -179,7 +179,8 @@ enum CompositionService {
             totalDuration: cursor
         )
 
-        // Audio mix — only create if something non-default
+        // Create audioMix when video volume is changed OR music is present.
+        // Having a music track always requires an audioMix so both tracks are mixed correctly.
         let needsAudioMix = videoVolume != 1.0 || musicCompositionTrack != nil
         var audioMix: AVMutableAudioMix? = nil
         if needsAudioMix {
