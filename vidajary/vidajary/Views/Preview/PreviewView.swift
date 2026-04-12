@@ -233,7 +233,7 @@ struct PreviewView: View {
     }
 
     private func initializeSortOrdersIfNeeded() {
-        guard project.clips.count > 1,
+        guard !project.clips.isEmpty,
               project.clips.allSatisfy({ $0.sortOrder == 0 }) else { return }
         let sorted = project.clips.sorted { $0.recordedAt < $1.recordedAt }
         for (i, clip) in sorted.enumerated() {
