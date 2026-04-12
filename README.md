@@ -24,31 +24,3 @@ An iPhone video diary app. Record clips across multiple projects, preview them s
 4. Connect your iPhone and hit **Cmd+R**
 
 No external dependencies — pure Swift, SwiftUI, SwiftData, and AVFoundation.
-
-## Project Structure
-
-```
-vidajary/
-├── Models/
-│   ├── Project.swift          SwiftData model for a project
-│   └── Clip.swift             SwiftData model for a single recorded clip
-├── Services/
-│   ├── CameraService.swift    AVCaptureSession setup, recording, zoom
-│   ├── CompositionService.swift  Stitches clips into AVMutableComposition with rotation
-│   ├── ExportService.swift    Renders composition and saves to Photos
-│   └── FileStorage.swift      Resolves the clips directory in app support
-├── Views/
-│   ├── Camera/
-│   │   ├── CameraView.swift         Main recording screen
-│   │   ├── CameraPreviewView.swift  AVCaptureSession preview layer
-│   │   └── LibraryPickerView.swift  PHPicker for importing library clips
-│   ├── Preview/
-│   │   └── PreviewView.swift        Playback, clip list, export
-│   └── Projects/
-│       ├── ProjectsView.swift       Project list with thumbnails
-│       ├── NewProjectSheet.swift    Create project sheet
-│       └── ProjectSettingsSheet.swift  Rename / delete project
-├── AppDelegate.swift          Dynamic per-screen orientation control
-├── ContentView.swift          Root navigation between camera and projects
-└── vidajaryApp.swift          App entry point with SwiftData container
-```
