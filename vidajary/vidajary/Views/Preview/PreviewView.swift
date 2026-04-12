@@ -16,6 +16,7 @@ struct PreviewView: View {
     @State private var isPlaying = false
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var isEditing = false
+    @State private var clipToTrim: Clip?
 
     var sortedClips: [Clip] {
         project.clips.sorted { $0.sortOrder < $1.sortOrder }
@@ -105,6 +106,15 @@ struct PreviewView: View {
                                     .frame(width: 36, height: 44)
                             }
                             .buttonStyle(.plain)
+                            Button {
+                                clipToTrim = clip
+                            } label: {
+                                Image(systemName: "scissors")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(.white.opacity(0.6))
+                                    .frame(width: 36, height: 44)
+                            }
+                            .buttonStyle(.plain)
                         }
                         .foregroundStyle(.white)
                     }
@@ -162,6 +172,15 @@ struct PreviewView: View {
             Button("OK") { exportError = nil }
         } message: {
             Text(exportError ?? "")
+        }
+        .fullScreenCover(item: $clipToTrim) { clip in
+            ClipTrimView(
+                clip: clip,
+                clipURL: clipsDirectory().appendingPathComponent(clip.filename)
+            )
+            .onDisappear {
+                Task { await rebuildPlayer() }
+            }
         }
         .sheet(isPresented: $showLibraryPicker) {
             LibraryPickerView { url, duration in
