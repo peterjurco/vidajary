@@ -17,7 +17,7 @@ struct PreviewView: View {
     @State private var thumbnails: [UUID: UIImage] = [:]
 
     var sortedClips: [Clip] {
-        project.clips.sorted { $0.recordedAt < $1.recordedAt }
+        project.clips.sorted { $0.sortOrder < $1.sortOrder }
     }
 
     var body: some View {
@@ -157,12 +157,17 @@ struct PreviewView: View {
 
     private func rebuildPlayer() async {
         do {
+            let musicURL = project.musicFilename.map { clipsDirectory().appendingPathComponent($0) }
             let result = try await CompositionService.buildComposition(
                 from: sortedClips,
-                in: clipsDirectory()
+                in: clipsDirectory(),
+                musicURL: musicURL,
+                musicVolume: project.musicVolume,
+                videoVolume: project.videoVolume
             )
             let item = AVPlayerItem(asset: result.composition)
             item.videoComposition = result.videoComposition
+            item.audioMix = result.audioMix
             player = AVPlayer(playerItem: item)
             isPlaying = false
         } catch {
@@ -192,13 +197,22 @@ struct PreviewView: View {
         isExporting = true
         defer { isExporting = false }
         do {
+            let musicURL = project.musicFilename.map { clipsDirectory().appendingPathComponent($0) }
             let result = try await CompositionService.buildComposition(
                 from: sortedClips,
-                in: clipsDirectory()
+                in: clipsDirectory(),
+                musicURL: musicURL,
+                musicVolume: project.musicVolume,
+                videoVolume: project.videoVolume
             )
             let tmp = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString + ".mov")
-            try await ExportService.export(composition: result.composition, videoComposition: result.videoComposition, to: tmp)
+            try await ExportService.export(
+                composition: result.composition,
+                videoComposition: result.videoComposition,
+                audioMix: result.audioMix,
+                to: tmp
+            )
             try await ExportService.saveToPhotoLibrary(url: tmp)
             try? FileManager.default.removeItem(at: tmp)
             showExportSuccess = true

@@ -15,7 +15,12 @@ final class ExportServiceTests: XCTestCase {
         let outputURL = dir.appendingPathComponent(UUID().uuidString + ".mov")
         defer { try? FileManager.default.removeItem(at: outputURL) }
 
-        try await ExportService.export(composition: result.composition, videoComposition: result.videoComposition, to: outputURL)
+        try await ExportService.export(
+            composition: result.composition,
+            videoComposition: result.videoComposition,
+            audioMix: result.audioMix,
+            to: outputURL
+        )
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
         let asset = AVURLAsset(url: outputURL)

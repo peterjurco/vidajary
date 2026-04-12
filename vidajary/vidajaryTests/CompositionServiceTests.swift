@@ -5,7 +5,7 @@ import SwiftData
 
 final class CompositionServiceTests: XCTestCase {
 
-    func testBuildCompositionFromTwoClips() async throws {
+    func testBuildCompositionFromTwoURLs() async throws {
         let dir = FileManager.default.temporaryDirectory
         let url1 = dir.appendingPathComponent(UUID().uuidString + ".mov")
         let url2 = dir.appendingPathComponent(UUID().uuidString + ".mov")
@@ -15,11 +15,10 @@ final class CompositionServiceTests: XCTestCase {
             try? FileManager.default.removeItem(at: url1)
             try? FileManager.default.removeItem(at: url2)
         }
-
         let result = try await CompositionService.buildComposition(from: [url1, url2])
-
         XCTAssertEqual(result.composition.duration.seconds, 3.0, accuracy: 0.2)
         XCTAssertFalse(result.composition.tracks(withMediaType: .video).isEmpty)
+        XCTAssertNil(result.audioMix) // no volumes set, no music
     }
 
     func testEmptyClipsReturnsEmptyComposition() async throws {
@@ -27,7 +26,7 @@ final class CompositionServiceTests: XCTestCase {
         XCTAssertEqual(result.composition.duration.seconds, 0.0, accuracy: 0.01)
     }
 
-    func testBuildCompositionFromClipModelsOrdersByRecordedAt() async throws {
+    func testBuildCompositionSortsBySortOrder() async throws {
         let dir = FileManager.default.temporaryDirectory
         let url1 = dir.appendingPathComponent(UUID().uuidString + ".mov")
         let url2 = dir.appendingPathComponent(UUID().uuidString + ".mov")
@@ -37,19 +36,44 @@ final class CompositionServiceTests: XCTestCase {
             try? FileManager.default.removeItem(at: url1)
             try? FileManager.default.removeItem(at: url2)
         }
-
-        // Create clips in reverse order — older clip (url2) recorded first
-        let clip1 = Clip(filename: url1.lastPathComponent, duration: 1.0)
-        clip1.recordedAt = Date(timeIntervalSince1970: 2000)
-        let clip2 = Clip(filename: url2.lastPathComponent, duration: 2.0)
-        clip2.recordedAt = Date(timeIntervalSince1970: 1000) // earlier
-
-        // Pass them in reversed order — composition should sort and put clip2 first
-        let result = try await CompositionService.buildComposition(
-            from: [clip1, clip2],
-            in: dir
-        )
-        // Total duration should still be 3s regardless of order
+        // clip2 (2s) sortOrder=0 should be first; clip1 (1s) sortOrder=1 should be second
+        let clip1 = Clip(filename: url1.lastPathComponent, duration: 1.0, sortOrder: 1)
+        let clip2 = Clip(filename: url2.lastPathComponent, duration: 2.0, sortOrder: 0)
+        let result = try await CompositionService.buildComposition(from: [clip1, clip2], in: dir)
         XCTAssertEqual(result.composition.duration.seconds, 3.0, accuracy: 0.2)
+        let videoTrack = result.composition.tracks(withMediaType: .video).first
+        XCTAssertNotNil(videoTrack)
+        // First segment should be 2s (clip2 with sortOrder=0)
+        if let first = videoTrack?.segments.first(where: { !$0.isEmpty }) {
+            XCTAssertEqual(first.timeMapping.target.duration.seconds, 2.0, accuracy: 0.3)
+        }
+    }
+
+    func testBuildCompositionAppliesTrim() async throws {
+        let dir = FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent(UUID().uuidString + ".mov")
+        try makeTestVideo(at: url, duration: 3.0, testCase: self)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let clip = Clip(filename: url.lastPathComponent, duration: 3.0, sortOrder: 0)
+        clip.trimStart = 0.5
+        clip.trimEnd = 2.5  // 2 seconds of content
+
+        let result = try await CompositionService.buildComposition(from: [clip], in: dir)
+        XCTAssertEqual(result.composition.duration.seconds, 2.0, accuracy: 0.3)
+    }
+
+    func testBuildCompositionWithReducedVideoVolumeReturnsAudioMix() async throws {
+        let dir = FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent(UUID().uuidString + ".mov")
+        try makeTestVideo(at: url, duration: 1.0, testCase: self)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let clip = Clip(filename: url.lastPathComponent, duration: 1.0, sortOrder: 0)
+        let result = try await CompositionService.buildComposition(
+            from: [clip], in: dir, videoVolume: 0.5
+        )
+        // audioMix is created when videoVolume != 1.0
+        XCTAssertNotNil(result.audioMix)
     }
 }
