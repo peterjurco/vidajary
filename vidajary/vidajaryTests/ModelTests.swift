@@ -66,4 +66,46 @@ final class ModelTests: XCTestCase {
 
         XCTAssertEqual(project.totalDuration, 15.0, accuracy: 0.01)
     }
+
+    func testClipDefaultFields() throws {
+        let clip = Clip(filename: "test.mov", duration: 10.0, sortOrder: 3)
+        XCTAssertEqual(clip.sortOrder, 3)
+        XCTAssertEqual(clip.rotationOverride, 0)
+        XCTAssertEqual(clip.trimStart, 0.0, accuracy: 0.001)
+        XCTAssertEqual(clip.trimEnd, 0.0, accuracy: 0.001)
+    }
+
+    func testClipEffectiveDuration() throws {
+        let clip = Clip(filename: "test.mov", duration: 10.0, sortOrder: 0)
+        XCTAssertEqual(clip.effectiveDuration, 10.0, accuracy: 0.01)
+
+        clip.trimStart = 2.0
+        clip.trimEnd = 7.0
+        XCTAssertEqual(clip.effectiveDuration, 5.0, accuracy: 0.01)
+
+        clip.trimStart = 1.0
+        clip.trimEnd = 0.0  // 0 means "no trim from end"
+        XCTAssertEqual(clip.effectiveDuration, 9.0, accuracy: 0.01)
+    }
+
+    func testTotalDurationUsesEffectiveDuration() throws {
+        let project = Project(name: "Test")
+        context.insert(project)
+        let clip = Clip(filename: "a.mov", duration: 10.0, sortOrder: 0)
+        clip.trimStart = 2.0
+        clip.trimEnd = 7.0  // effective = 5s
+        project.clips.append(clip)
+        project.clips.append(Clip(filename: "b.mov", duration: 5.0, sortOrder: 1))
+        try context.save()
+        XCTAssertEqual(project.totalDuration, 10.0, accuracy: 0.01)
+    }
+
+    func testProjectAudioDefaults() throws {
+        let project = Project(name: "Test")
+        context.insert(project)
+        try context.save()
+        XCTAssertNil(project.musicFilename)
+        XCTAssertEqual(project.musicVolume, 1.0, accuracy: 0.001)
+        XCTAssertEqual(project.videoVolume, 1.0, accuracy: 0.001)
+    }
 }

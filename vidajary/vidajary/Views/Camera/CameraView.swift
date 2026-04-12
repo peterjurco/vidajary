@@ -126,7 +126,7 @@ struct CameraView: View {
     private func setupCamera() async {
         try? await camera.setup()
         camera.onClipRecorded = { url, duration in
-            let clip = Clip(filename: url.lastPathComponent, duration: duration)
+            let clip = Clip(filename: url.lastPathComponent, duration: duration, sortOrder: project.clips.count)
             project.clips.append(clip)
             project.lastRecordedAt = Date()
             try? context.save()
