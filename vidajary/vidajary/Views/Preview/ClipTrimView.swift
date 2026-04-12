@@ -29,7 +29,10 @@ struct ClipTrimView: View {
             VStack(spacing: 0) {
                 // Top bar
                 HStack {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        player?.pause()
+                        dismiss()
+                    }
                         .foregroundStyle(.white.opacity(0.7))
                         .frame(height: 44)
                     Spacer()
@@ -134,7 +137,7 @@ struct ClipTrimView: View {
 
                         // End handle
                         TrimHandle()
-                            .offset(x: min(geo.size.width - 8, endX - 4))
+                            .offset(x: max(0, min(geo.size.width - 8, endX - 4)))
                             .gesture(DragGesture(minimumDistance: 1)
                                 .onChanged { value in
                                     let t = min(clip.duration, max(localTrimStart + 0.5,
@@ -157,15 +160,14 @@ struct ClipTrimView: View {
             let item = AVPlayerItem(asset: asset)
             player = AVPlayer(playerItem: item)
             player?.seek(to: CMTimeMakeWithSeconds(localTrimStart, preferredTimescale: 600))
-            await loadFilmstrip()
+            await loadFilmstrip(asset: asset)
         }
         .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { _ in
             isPlaying = false
         }
     }
 
-    private func loadFilmstrip() async {
-        let asset = AVURLAsset(url: clipURL)
+    private func loadFilmstrip(asset: AVURLAsset) async {
         guard let duration = try? await asset.load(.duration) else { return }
         let count = 8
         let generator = AVAssetImageGenerator(asset: asset)
