@@ -163,15 +163,20 @@ struct PreviewView: View {
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.6))
                             .frame(width: 36, alignment: .leading)
-                        Slider(value: Binding(
-                            get: { Double(project.videoVolume) },
-                            set: { project.videoVolume = Float($0) }
-                        ), in: 0...1)
+                        Slider(
+                            value: Binding(
+                                get: { Double(project.videoVolume) },
+                                set: { project.videoVolume = Float($0) }
+                            ),
+                            in: 0...1,
+                            onEditingChanged: { editing in
+                                if !editing {
+                                    try? context.save()
+                                    Task { await rebuildPlayer() }
+                                }
+                            }
+                        )
                         .tint(.white)
-                        .onChange(of: project.videoVolume) { _, _ in
-                            try? context.save()
-                            Task { await rebuildPlayer() }
-                        }
                         Text("\(Int(project.videoVolume * 100))%")
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.5))
@@ -187,15 +192,20 @@ struct PreviewView: View {
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.6))
                                 .frame(width: 36, alignment: .leading)
-                            Slider(value: Binding(
-                                get: { Double(project.musicVolume) },
-                                set: { project.musicVolume = Float($0) }
-                            ), in: 0...1)
+                            Slider(
+                                value: Binding(
+                                    get: { Double(project.musicVolume) },
+                                    set: { project.musicVolume = Float($0) }
+                                ),
+                                in: 0...1,
+                                onEditingChanged: { editing in
+                                    if !editing {
+                                        try? context.save()
+                                        Task { await rebuildPlayer() }
+                                    }
+                                }
+                            )
                             .tint(.white)
-                            .onChange(of: project.musicVolume) { _, _ in
-                                try? context.save()
-                                Task { await rebuildPlayer() }
-                            }
                             Text("\(Int(project.musicVolume * 100))%")
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.5))
