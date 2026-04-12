@@ -161,7 +161,7 @@ struct ClipTrimView: View {
             let item = AVPlayerItem(asset: asset)
             playerItem = item
             player = AVPlayer(playerItem: item)
-            player?.seek(to: CMTimeMakeWithSeconds(localTrimStart, preferredTimescale: 600))
+            _ = await player?.seek(to: CMTimeMakeWithSeconds(localTrimStart, preferredTimescale: 600))
             await loadFilmstrip(asset: asset)
         }
         .onReceive(
