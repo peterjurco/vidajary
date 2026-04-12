@@ -147,7 +147,7 @@ struct ClipTrimView: View {
                             )
                     }
                 }
-                .frame(height: 60)
+                .frame(height: 68)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
