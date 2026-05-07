@@ -73,6 +73,7 @@ struct MusicPickerSheet: View {
     }
 
     private func importMusic(from url: URL) {
+        errorMessage = nil
         guard url.startAccessingSecurityScopedResource() else {
             errorMessage = "Could not access the selected file."
             return
