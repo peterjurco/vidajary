@@ -79,9 +79,7 @@ enum CompositionService {
     static func buildComposition(
         from clips: [Clip],
         in directory: URL,
-        musicURL: URL? = nil,
-        musicVolume: Float = 1.0,
-        videoVolume: Float = 1.0
+        musicURL: URL? = nil
     ) async throws -> CompositionResult {
         let sortedClips = clips.sorted { $0.sortOrder < $1.sortOrder }
         let composition = AVMutableComposition()
@@ -96,14 +94,19 @@ enum CompositionService {
             return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil)
         }
 
-        var videoAudioTrack: AVMutableCompositionTrack? = composition.addMutableTrack(
-            withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
-        )
-        var audioInserted = false
+        struct ClipTimelineInfo {
+            let startTime: CMTime
+            let duration: CMTime
+            let clipVolume: Float
+            let musicVolume: Float
+            let audioTrack: AVMutableCompositionTrack?
+        }
+
         var cursor = CMTime.zero
         var renderSize: CGSize?
         var frameRate: Float = 30
         var clipInfos: [(timeRange: CMTimeRange, naturalSize: CGSize, preferredTransform: CGAffineTransform, rotationOverride: Int)] = []
+        var clipTimelineInfos: [ClipTimelineInfo] = []
 
         for clip in sortedClips {
             let url = directory.appendingPathComponent(clip.filename)
@@ -137,16 +140,25 @@ enum CompositionService {
                     rotationOverride: clip.rotationOverride
                 ))
             }
-            if let srcAudio = try await asset.loadTracks(withMediaType: .audio).first {
-                try videoAudioTrack?.insertTimeRange(sourceRange, of: srcAudio, at: cursor)
-                audioInserted = true
-            }
-            cursor = CMTimeAdd(cursor, trimmedDuration)
-        }
 
-        if !audioInserted, let at = videoAudioTrack {
-            composition.removeTrack(at)
-            videoAudioTrack = nil
+            var clipAudioTrack: AVMutableCompositionTrack? = nil
+            if let srcAudio = try await asset.loadTracks(withMediaType: .audio).first {
+                let track = composition.addMutableTrack(
+                    withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
+                )
+                try track?.insertTimeRange(sourceRange, of: srcAudio, at: cursor)
+                clipAudioTrack = track
+            }
+
+            clipTimelineInfos.append(ClipTimelineInfo(
+                startTime: cursor,
+                duration: trimmedDuration,
+                clipVolume: clip.clipVolume,
+                musicVolume: clip.musicVolume,
+                audioTrack: clipAudioTrack
+            ))
+
+            cursor = CMTimeAdd(cursor, trimmedDuration)
         }
 
         // Music track
@@ -179,24 +191,45 @@ enum CompositionService {
             totalDuration: cursor
         )
 
-        // Create audioMix when video volume is changed OR music is present.
-        // Having a music track always requires an audioMix so both tracks are mixed correctly.
-        let needsAudioMix = videoVolume != 1.0 || musicCompositionTrack != nil
+        // Build audioMix
+        let hasClipAudio = clipTimelineInfos.contains { $0.audioTrack != nil }
+        let needsAudioMix = hasClipAudio || musicCompositionTrack != nil
         var audioMix: AVMutableAudioMix? = nil
         if needsAudioMix {
             var params: [AVMutableAudioMixInputParameters] = []
-            if let vat = videoAudioTrack {
+
+            // Per-clip audio volume
+            for info in clipTimelineInfos {
+                guard let track = info.audioTrack else { continue }
                 let p = AVMutableAudioMixInputParameters()
-                p.trackID = vat.trackID
-                p.setVolume(videoVolume, at: .zero)
+                p.trackID = track.trackID
+                p.setVolume(info.clipVolume, at: info.startTime)
                 params.append(p)
             }
+
+            // Music volume automation with 0.3s ramps at level-changing boundaries
             if let mt = musicCompositionTrack {
                 let p = AVMutableAudioMixInputParameters()
                 p.trackID = mt.trackID
-                p.setVolume(musicVolume, at: .zero)
+                let rampDuration = CMTimeMakeWithSeconds(0.3, preferredTimescale: 600)
+
+                if let first = clipTimelineInfos.first {
+                    p.setVolume(first.musicVolume, at: .zero)
+                }
+                for i in 1..<clipTimelineInfos.count {
+                    let prev = clipTimelineInfos[i - 1]
+                    let curr = clipTimelineInfos[i]
+                    if prev.musicVolume != curr.musicVolume {
+                        p.setVolumeRamp(
+                            fromStartVolume: prev.musicVolume,
+                            toEndVolume: curr.musicVolume,
+                            timeRange: CMTimeRange(start: curr.startTime, duration: rampDuration)
+                        )
+                    }
+                }
                 params.append(p)
             }
+
             let mix = AVMutableAudioMix()
             mix.inputParameters = params
             audioMix = mix
