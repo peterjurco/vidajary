@@ -2,7 +2,6 @@ import SwiftUI
 import AVKit
 import AVFoundation
 import SwiftData
-import UniformTypeIdentifiers
 
 struct PreviewView: View {
     @Environment(\.modelContext) private var context
@@ -11,14 +10,15 @@ struct PreviewView: View {
 
     @State private var player: AVPlayer?
     @State private var isExporting = false
+    @State private var exportProgress: Float = 0
     @State private var showExportSuccess = false
     @State private var exportError: String?
     @State private var showLibraryPicker = false
-    @State private var showMusicPicker = false
+    @State private var showMusicPickerSheet = false
     @State private var isPlaying = false
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var isEditing = false
-    @State private var clipToTrim: Clip?
+    @State private var clipToEdit: Clip?
 
     var sortedClips: [Clip] {
         project.clips.sorted { $0.sortOrder < $1.sortOrder }
@@ -41,6 +41,11 @@ struct PreviewView: View {
                         Image(systemName: isEditing ? "checkmark.circle" : "arrow.up.arrow.down")
                             .font(.system(size: 20))
                             .foregroundStyle(isEditing ? .white : .white.opacity(0.6))
+                    }
+                    Button { showMusicPickerSheet = true } label: {
+                        Image(systemName: "music.note")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                     Button { showLibraryPicker = true } label: {
                         Image(systemName: "plus.circle")
@@ -100,18 +105,9 @@ struct PreviewView: View {
                             }
                             Spacer()
                             Button {
-                                rotateClip(clip)
+                                clipToEdit = clip
                             } label: {
-                                Image(systemName: "rotate.right")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(.white.opacity(0.6))
-                                    .frame(width: 36, height: 44)
-                            }
-                            .buttonStyle(.plain)
-                            Button {
-                                clipToTrim = clip
-                            } label: {
-                                Image(systemName: "scissors")
+                                Image(systemName: "pencil")
                                     .font(.system(size: 16))
                                     .foregroundStyle(.white.opacity(0.6))
                                     .frame(width: 36, height: 44)
@@ -129,108 +125,35 @@ struct PreviewView: View {
                 .frame(maxHeight: 200)
                 .environment(\.editMode, .constant(isEditing ? .active : .inactive))
 
-                // Audio controls
-                VStack(spacing: 10) {
-                    HStack {
-                        Image(systemName: "music.note")
-                            .foregroundStyle(.white.opacity(0.6))
-                            .frame(width: 20)
-                        if let musicName = project.musicFilename {
-                            Text(musicName.prefix(30) + (musicName.count > 30 ? "…" : ""))
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.7))
-                                .lineLimit(1)
-                            Spacer()
-                            Button { removeMusic() } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
-                        } else {
-                            Button("Add Music") {
-                                showMusicPicker = true
-                            }
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.7))
-                            Spacer()
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform")
-                            .foregroundStyle(.white.opacity(0.6))
-                            .frame(width: 20)
-                        Text("Video")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.6))
-                            .frame(width: 36, alignment: .leading)
-                        Slider(
-                            value: Binding(
-                                get: { Double(project.videoVolume) },
-                                set: { project.videoVolume = Float($0) }
-                            ),
-                            in: 0...1,
-                            onEditingChanged: { editing in
-                                if !editing {
-                                    try? context.save()
-                                    Task { await rebuildPlayer() }
-                                }
-                            }
-                        )
-                        .tint(.white)
-                        Text("\(Int(project.videoVolume * 100))%")
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.5))
-                            .frame(width: 36, alignment: .trailing)
-                    }
-
-                    if project.musicFilename != nil {
-                        HStack(spacing: 8) {
-                            Image(systemName: "music.note")
-                                .foregroundStyle(.white.opacity(0.6))
-                                .frame(width: 20)
-                            Text("Music")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.6))
-                                .frame(width: 36, alignment: .leading)
-                            Slider(
-                                value: Binding(
-                                    get: { Double(project.musicVolume) },
-                                    set: { project.musicVolume = Float($0) }
-                                ),
-                                in: 0...1,
-                                onEditingChanged: { editing in
-                                    if !editing {
-                                        try? context.save()
-                                        Task { await rebuildPlayer() }
-                                    }
-                                }
-                            )
-                            .tint(.white)
-                            Text("\(Int(project.musicVolume * 100))%")
-                                .font(.caption)
-                                .foregroundStyle(.white.opacity(0.5))
-                                .frame(width: 36, alignment: .trailing)
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-
                 Button {
                     Task { await exportVideo() }
                 } label: {
-                    Group {
-                        if isExporting {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text("Export to Library")
-                                .font(.system(size: 16, weight: .medium))
+                    GeometryReader { geo in
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.white.opacity(0.15))
+                            if isExporting {
+                                HStack(spacing: 0) {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.white.opacity(0.3))
+                                        .frame(width: geo.size.width * CGFloat(exportProgress))
+                                    Spacer(minLength: 0)
+                                }
+                                .animation(.easeInOut(duration: 0.15), value: exportProgress)
+                            }
+                            if isExporting {
+                                Text("Exporting… \(Int(exportProgress * 100))%")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(.white)
+                            } else {
+                                Text("Export to Library")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(.white)
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(.white.opacity(0.15))
-                    .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .padding(.horizontal, 20)
@@ -262,21 +185,19 @@ struct PreviewView: View {
         } message: {
             Text(exportError ?? "")
         }
-        .fullScreenCover(item: $clipToTrim) { clip in
-            ClipTrimView(
+        .fullScreenCover(item: $clipToEdit) { clip in
+            ClipEditView(
                 clip: clip,
-                clipURL: clipsDirectory().appendingPathComponent(clip.filename)
+                clipURL: clipsDirectory().appendingPathComponent(clip.filename),
+                project: project
             )
             .onDisappear {
                 Task { await rebuildPlayer() }
             }
         }
-        .fileImporter(isPresented: $showMusicPicker, allowedContentTypes: [.audio]) { result in
-            switch result {
-            case .success(let url):
-                importMusic(from: url)
-            case .failure(let error):
-                exportError = error.localizedDescription
+        .sheet(isPresented: $showMusicPickerSheet) {
+            MusicPickerSheet(project: project) {
+                Task { await rebuildPlayer() }
             }
         }
         .sheet(isPresented: $showLibraryPicker) {
@@ -292,46 +213,13 @@ struct PreviewView: View {
         }
     }
 
-    private func importMusic(from url: URL) {
-        guard url.startAccessingSecurityScopedResource() else {
-            exportError = "Could not access the selected file."
-            return
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
-        let filename = UUID().uuidString + "." + url.pathExtension
-        let dest = clipsDirectory().appendingPathComponent(filename)
-        do {
-            try FileManager.default.copyItem(at: url, to: dest)
-        } catch {
-            exportError = "Failed to import music: \(error.localizedDescription)"
-            return
-        }
-        if let old = project.musicFilename {
-            try? FileManager.default.removeItem(at: clipsDirectory().appendingPathComponent(old))
-        }
-        project.musicFilename = filename
-        try? context.save()
-        Task { await rebuildPlayer() }
-    }
-
-    private func removeMusic() {
-        if let old = project.musicFilename {
-            try? FileManager.default.removeItem(at: clipsDirectory().appendingPathComponent(old))
-        }
-        project.musicFilename = nil
-        try? context.save()
-        Task { await rebuildPlayer() }
-    }
-
     private func rebuildPlayer() async {
         do {
             let musicURL = project.musicFilename.map { clipsDirectory().appendingPathComponent($0) }
             let result = try await CompositionService.buildComposition(
                 from: sortedClips,
                 in: clipsDirectory(),
-                musicURL: musicURL,
-                musicVolume: project.musicVolume,
-                videoVolume: project.videoVolume
+                musicURL: musicURL
             )
             let item = AVPlayerItem(asset: result.composition)
             item.videoComposition = result.videoComposition
@@ -363,15 +251,17 @@ struct PreviewView: View {
 
     private func exportVideo() async {
         isExporting = true
-        defer { isExporting = false }
+        exportProgress = 0
+        defer {
+            isExporting = false
+            exportProgress = 0
+        }
         do {
             let musicURL = project.musicFilename.map { clipsDirectory().appendingPathComponent($0) }
             let result = try await CompositionService.buildComposition(
                 from: sortedClips,
                 in: clipsDirectory(),
-                musicURL: musicURL,
-                musicVolume: project.musicVolume,
-                videoVolume: project.videoVolume
+                musicURL: musicURL
             )
             let tmp = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString + ".mov")
@@ -379,7 +269,8 @@ struct PreviewView: View {
                 composition: result.composition,
                 videoComposition: result.videoComposition,
                 audioMix: result.audioMix,
-                to: tmp
+                to: tmp,
+                onProgress: { [self] p in exportProgress = p }
             )
             try await ExportService.saveToPhotoLibrary(url: tmp)
             try? FileManager.default.removeItem(at: tmp)
@@ -416,12 +307,6 @@ struct PreviewView: View {
             try? FileManager.default.removeItem(at: dir.appendingPathComponent(clip.filename))
             project.clips.removeAll { $0.id == clip.id }
         }
-        try? context.save()
-        Task { await rebuildPlayer() }
-    }
-
-    private func rotateClip(_ clip: Clip) {
-        clip.rotationOverride = (clip.rotationOverride + 90) % 360
         try? context.save()
         Task { await rebuildPlayer() }
     }
