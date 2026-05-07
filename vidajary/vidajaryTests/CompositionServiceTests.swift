@@ -63,17 +63,15 @@ final class CompositionServiceTests: XCTestCase {
         XCTAssertEqual(result.composition.duration.seconds, 2.0, accuracy: 0.3)
     }
 
-    func testBuildCompositionWithReducedVideoVolumeReturnsAudioMix() async throws {
+    func testBuildCompositionWithClipAudioReturnsAudioMix() async throws {
         let dir = FileManager.default.temporaryDirectory
         let url = dir.appendingPathComponent(UUID().uuidString + ".mov")
         try makeTestVideo(at: url, duration: 1.0, testCase: self)
         defer { try? FileManager.default.removeItem(at: url) }
 
         let clip = Clip(filename: url.lastPathComponent, duration: 1.0, sortOrder: 0)
-        let result = try await CompositionService.buildComposition(
-            from: [clip], in: dir, videoVolume: 0.5
-        )
-        // audioMix is created when videoVolume != 1.0
+        let result = try await CompositionService.buildComposition(from: [clip], in: dir)
+        // audioMix is created whenever any clip has audio
         XCTAssertNotNil(result.audioMix)
     }
 }

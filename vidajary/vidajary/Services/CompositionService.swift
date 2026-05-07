@@ -96,7 +96,6 @@ enum CompositionService {
 
         struct ClipTimelineInfo {
             let startTime: CMTime
-            let duration: CMTime
             let clipVolume: Float
             let musicVolume: Float
             let audioTrack: AVMutableCompositionTrack?
@@ -152,7 +151,6 @@ enum CompositionService {
 
             clipTimelineInfos.append(ClipTimelineInfo(
                 startTime: cursor,
-                duration: trimmedDuration,
                 clipVolume: clip.clipVolume,
                 musicVolume: clip.musicVolume,
                 audioTrack: clipAudioTrack
