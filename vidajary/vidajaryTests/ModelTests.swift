@@ -88,6 +88,26 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(clip.effectiveDuration, 9.0, accuracy: 0.01)
     }
 
+    func testClipVolumeDefaults() throws {
+        let clip = Clip(filename: "test.mov", duration: 10.0)
+        XCTAssertEqual(clip.clipVolume, 1.0, accuracy: 0.001)
+        XCTAssertEqual(clip.musicVolume, 1.0, accuracy: 0.001)
+    }
+
+    func testClipVolumesPersist() throws {
+        let project = Project(name: "Test")
+        context.insert(project)
+        let clip = Clip(filename: "a.mov", duration: 5.0)
+        clip.clipVolume = 0.5
+        clip.musicVolume = 0.3
+        project.clips.append(clip)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Clip>()).first!
+        XCTAssertEqual(fetched.clipVolume, 0.5, accuracy: 0.001)
+        XCTAssertEqual(fetched.musicVolume, 0.3, accuracy: 0.001)
+    }
+
     func testTotalDurationUsesEffectiveDuration() throws {
         let project = Project(name: "Test")
         context.insert(project)
