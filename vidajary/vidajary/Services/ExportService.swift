@@ -18,11 +18,13 @@ enum ExportService {
     }
 
     /// Exports the composition to a file at `outputURL`.
+    /// `onProgress` is called on the main actor roughly every 0.1 s with a value in [0, 1].
     static func export(
         composition: AVMutableComposition,
         videoComposition: AVMutableVideoComposition? = nil,
         audioMix: AVMutableAudioMix? = nil,
-        to outputURL: URL
+        to outputURL: URL,
+        onProgress: (@MainActor (Float) -> Void)? = nil
     ) async throws {
         guard let session = AVAssetExportSession(
             asset: composition,
@@ -35,9 +37,20 @@ enum ExportService {
         session.videoComposition = videoComposition
         session.audioMix = audioMix
 
+        var timer: Timer?
+        if let onProgress {
+            nonisolated(unsafe) let sessionRef = session
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                let p = sessionRef.progress
+                Task { @MainActor in onProgress(p) }
+            }
+        }
+
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             session.exportAsynchronously { continuation.resume() }
         }
+
+        timer?.invalidate()
 
         if let error = session.error { throw error }
         guard session.status == .completed else {
