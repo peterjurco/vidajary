@@ -243,9 +243,11 @@ struct PreviewView: View {
             }
         }
         .sheet(isPresented: $showLibraryPicker) {
-            LibraryPickerView { url, duration in
-                let clip = Clip(filename: url.lastPathComponent, duration: duration, sortOrder: project.clips.count)
-                project.clips.append(clip)
+            LibraryPickerView { clips in
+                for (url, duration) in clips {
+                    let clip = Clip(filename: url.lastPathComponent, duration: duration, sortOrder: project.clips.count)
+                    project.clips.append(clip)
+                }
                 project.lastRecordedAt = Date()
                 try? context.save()
                 Task { await rebuildPlayer() }
