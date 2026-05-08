@@ -20,10 +20,10 @@ final class Clip {
     var clipVolume: Float = 1.0     // this clip's audio volume (0–1)
     var musicVolume: Float = 1.0    // background music level during this clip (0–1)
 
-    init(filename: String, duration: TimeInterval, sortOrder: Int = 0) {
+    init(filename: String, duration: TimeInterval, sortOrder: Int = 0, recordedAt: Date = Date()) {
         self.id = UUID()
         self.filename = filename
-        self.recordedAt = Date()
+        self.recordedAt = recordedAt
         self.duration = duration
         self.sortOrder = sortOrder
         self.rotationOverride = 0

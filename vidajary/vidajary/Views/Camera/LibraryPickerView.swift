@@ -3,7 +3,7 @@ import PhotosUI
 import AVFoundation
 
 struct LibraryPickerView: UIViewControllerRepresentable {
-    var onPicked: ([(URL, TimeInterval)]) -> Void
+    var onPicked: ([(URL, TimeInterval, Date)]) -> Void
     var onDismissed: () -> Void
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
@@ -20,21 +20,19 @@ struct LibraryPickerView: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(onPicked: onPicked, onDismissed: onDismissed) }
 
     final class Coordinator: NSObject, PHPickerViewControllerDelegate {
-        let onPicked: ([(URL, TimeInterval)]) -> Void
+        let onPicked: ([(URL, TimeInterval, Date)]) -> Void
         let onDismissed: () -> Void
 
-        init(onPicked: @escaping ([(URL, TimeInterval)]) -> Void, onDismissed: @escaping () -> Void) {
+        init(onPicked: @escaping ([(URL, TimeInterval, Date)]) -> Void, onDismissed: @escaping () -> Void) {
             self.onPicked = onPicked
             self.onDismissed = onDismissed
         }
 
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            // Dismiss via SwiftUI binding — do NOT call picker.dismiss(animated:) as it can
-            // walk the UIKit VC hierarchy and inadvertently close the parent fullScreenCover.
             DispatchQueue.main.async { self.onDismissed() }
             guard !results.isEmpty else { return }
             Task {
-                var clips: [(URL, TimeInterval)] = []
+                var clips: [(URL, TimeInterval, Date)] = []
                 for result in results {
                     if let clip = await Self.loadVideo(from: result) {
                         clips.append(clip)
@@ -46,8 +44,14 @@ struct LibraryPickerView: UIViewControllerRepresentable {
             }
         }
 
-        private static func loadVideo(from result: PHPickerResult) async -> (URL, TimeInterval)? {
-            await withCheckedContinuation { continuation in
+        private static func loadVideo(from result: PHPickerResult) async -> (URL, TimeInterval, Date)? {
+            let creationDate: Date = {
+                guard let identifier = result.assetIdentifier else { return Date() }
+                let assets = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
+                return assets.firstObject?.creationDate ?? Date()
+            }()
+
+            return await withCheckedContinuation { continuation in
                 result.itemProvider.loadFileRepresentation(forTypeIdentifier: "public.movie") { url, error in
                     guard let url, error == nil else {
                         continuation.resume(returning: nil)
@@ -64,7 +68,7 @@ struct LibraryPickerView: UIViewControllerRepresentable {
                         do {
                             let asset = AVURLAsset(url: destination)
                             let duration = try await asset.load(.duration)
-                            continuation.resume(returning: (destination, duration.seconds))
+                            continuation.resume(returning: (destination, duration.seconds, creationDate))
                         } catch {
                             continuation.resume(returning: nil)
                         }
