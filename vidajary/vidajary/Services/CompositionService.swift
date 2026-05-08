@@ -4,6 +4,7 @@ struct CompositionResult {
     let composition: AVMutableComposition
     let videoComposition: AVMutableVideoComposition?
     let audioMix: AVMutableAudioMix?
+    let clipRanges: [(id: UUID, start: CMTime, end: CMTime)]
 }
 
 enum CompositionService {
@@ -12,13 +13,13 @@ enum CompositionService {
     static func buildComposition(from clipURLs: [URL]) async throws -> CompositionResult {
         let composition = AVMutableComposition()
         guard !clipURLs.isEmpty else {
-            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil)
+            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil, clipRanges: [])
         }
 
         guard let videoTrack = composition.addMutableTrack(
             withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid
         ) else {
-            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil)
+            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil, clipRanges: [])
         }
 
         let audioTrack = composition.addMutableTrack(
@@ -61,7 +62,7 @@ enum CompositionService {
         if !audioInserted, let at = audioTrack { composition.removeTrack(at) }
 
         guard let renderSize, !clipInfos.isEmpty else {
-            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil)
+            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil, clipRanges: [])
         }
 
         let videoComposition = buildVideoComposition(
@@ -72,7 +73,7 @@ enum CompositionService {
             totalDuration: cursor
         )
 
-        return CompositionResult(composition: composition, videoComposition: videoComposition, audioMix: nil)
+        return CompositionResult(composition: composition, videoComposition: videoComposition, audioMix: nil, clipRanges: [])
     }
 
     // Clip-based overload used by the app — full metadata support
@@ -85,22 +86,27 @@ enum CompositionService {
         let composition = AVMutableComposition()
 
         guard !sortedClips.isEmpty else {
-            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil)
+            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil, clipRanges: [])
         }
 
         guard let videoTrack = composition.addMutableTrack(
             withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid
         ) else {
-            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil)
+            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil, clipRanges: [])
         }
 
         struct ClipTimelineInfo {
             let startTime: CMTime
+            let endTime: CMTime
             let clipVolume: Float
             let musicVolume: Float
-            let audioTrack: AVMutableCompositionTrack?
+            let hasAudio: Bool
         }
 
+        let audioTrack = composition.addMutableTrack(
+            withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
+        )
+        var audioInserted = false
         var cursor = CMTime.zero
         var renderSize: CGSize?
         var frameRate: Float = 30
@@ -140,24 +146,26 @@ enum CompositionService {
                 ))
             }
 
-            var clipAudioTrack: AVMutableCompositionTrack? = nil
+            var hasAudio = false
             if let srcAudio = try await asset.loadTracks(withMediaType: .audio).first {
-                let track = composition.addMutableTrack(
-                    withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
-                )
-                try track?.insertTimeRange(sourceRange, of: srcAudio, at: cursor)
-                clipAudioTrack = track
+                try audioTrack?.insertTimeRange(sourceRange, of: srcAudio, at: cursor)
+                audioInserted = true
+                hasAudio = true
             }
 
+            let clipStart = cursor
+            cursor = CMTimeAdd(cursor, trimmedDuration)
+
             clipTimelineInfos.append(ClipTimelineInfo(
-                startTime: cursor,
+                startTime: clipStart,
+                endTime: cursor,
                 clipVolume: clip.clipVolume,
                 musicVolume: clip.musicVolume,
-                audioTrack: clipAudioTrack
+                hasAudio: hasAudio
             ))
-
-            cursor = CMTimeAdd(cursor, trimmedDuration)
         }
+
+        if !audioInserted, let at = audioTrack { composition.removeTrack(at) }
 
         // Music track
         var musicCompositionTrack: AVMutableCompositionTrack? = nil
@@ -178,7 +186,7 @@ enum CompositionService {
         }
 
         guard let renderSize, !clipInfos.isEmpty else {
-            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil)
+            return CompositionResult(composition: composition, videoComposition: nil, audioMix: nil, clipRanges: [])
         }
 
         let videoComposition = buildVideoComposition(
@@ -190,18 +198,25 @@ enum CompositionService {
         )
 
         // Build audioMix
-        let hasClipAudio = clipTimelineInfos.contains { $0.audioTrack != nil }
-        let needsAudioMix = hasClipAudio || musicCompositionTrack != nil
+        let needsAudioMix = audioInserted || musicCompositionTrack != nil
         var audioMix: AVMutableAudioMix? = nil
         if needsAudioMix {
             var params: [AVMutableAudioMixInputParameters] = []
 
-            // Per-clip audio volume
-            for info in clipTimelineInfos {
-                guard let track = info.audioTrack else { continue }
+            // Per-clip volume automation on the single merged audio track.
+            // setVolume ramps between keyframes, so we pin each clip's volume just
+            // before its boundary to make transitions instantaneous.
+            if audioInserted, let track = audioTrack {
                 let p = AVMutableAudioMixInputParameters()
                 p.trackID = track.trackID
-                p.setVolume(info.clipVolume, at: info.startTime)
+                let oneSample = CMTime(value: 1, timescale: 44100)
+                for info in clipTimelineInfos where info.hasAudio {
+                    p.setVolume(info.clipVolume, at: info.startTime)
+                    let pinTime = CMTimeSubtract(info.endTime, oneSample)
+                    if CMTimeCompare(pinTime, info.startTime) > 0 {
+                        p.setVolume(info.clipVolume, at: pinTime)
+                    }
+                }
                 params.append(p)
             }
 
@@ -233,7 +248,11 @@ enum CompositionService {
             audioMix = mix
         }
 
-        return CompositionResult(composition: composition, videoComposition: videoComposition, audioMix: audioMix)
+        let clipRanges = zip(sortedClips, clipTimelineInfos).map { clip, info in
+            (id: clip.id, start: info.startTime, end: info.endTime)
+        }
+
+        return CompositionResult(composition: composition, videoComposition: videoComposition, audioMix: audioMix, clipRanges: clipRanges)
     }
 
     // MARK: - Private helpers

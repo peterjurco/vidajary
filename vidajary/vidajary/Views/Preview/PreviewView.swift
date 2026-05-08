@@ -16,9 +16,13 @@ struct PreviewView: View {
     @State private var showLibraryPicker = false
     @State private var showMusicPickerSheet = false
     @State private var isPlaying = false
+    @State private var isRebuildingPlayer = false
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var isEditing = false
     @State private var clipToEdit: Clip?
+    @State private var currentClipID: UUID?
+    @State private var timeObserverToken: Any?
+    @State private var clipRanges: [(id: UUID, start: CMTime, end: CMTime)] = []
 
     var sortedClips: [Clip] {
         project.clips.sorted { $0.sortOrder < $1.sortOrder }
@@ -58,12 +62,20 @@ struct PreviewView: View {
                 ZStack {
                     if let player {
                         VideoPlayer(player: player)
-                            .frame(maxHeight: .infinity)
+                            .frame(height: 260)
                     } else {
-                        ProgressView().tint(.white).frame(maxHeight: .infinity)
+                        Color.black.frame(height: 260)
                     }
 
-                    if !isPlaying {
+                    if isRebuildingPlayer {
+                        Color.black.opacity(0.5).frame(height: 260)
+                        VStack(spacing: 10) {
+                            ProgressView().tint(.white)
+                            Text("Generating preview…")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                    } else if !isPlaying {
                         Button {
                             player?.play()
                             isPlaying = true
@@ -81,49 +93,78 @@ struct PreviewView: View {
                 }
 
                 // Clip list with swipe-to-delete
-                List {
-                    ForEach(sortedClips) { clip in
-                        HStack {
-                            if let thumbnail = thumbnails[clip.id] {
-                                Image(uiImage: thumbnail)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 60, height: 40)
-                                    .clipped()
-                                    .cornerRadius(4)
-                            } else {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.gray.opacity(0.3))
-                                    .frame(width: 60, height: 40)
+                ScrollViewReader { proxy in
+                    List {
+                        ForEach(sortedClips) { clip in
+                            HStack {
+                                if let thumbnail = thumbnails[clip.id] {
+                                    Image(uiImage: thumbnail)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 60, height: 40)
+                                        .clipped()
+                                        .cornerRadius(4)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.gray.opacity(0.3))
+                                        .frame(width: 60, height: 40)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(clip.recordedAt.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.subheadline)
+                                    Text(formattedDuration((clip.trimEnd > 0 ? clip.trimEnd : clip.duration) - clip.trimStart))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button {
+                                    if let range = clipRanges.first(where: { $0.id == clip.id }) {
+                                        player?.seek(to: range.start)
+                                        player?.play()
+                                        isPlaying = true
+                                    }
+                                } label: {
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.white.opacity(0.6))
+                                        .frame(width: 32, height: 44)
+                                }
+                                .buttonStyle(.plain)
+                                Button {
+                                    player?.pause()
+                                    isPlaying = false
+                                    clipToEdit = clip
+                                } label: {
+                                    Image(systemName: "square.and.pencil")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(.white.opacity(0.6))
+                                        .frame(width: 36, height: 44)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(clip.recordedAt.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.subheadline)
-                                Text(formattedDuration(clip.duration))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button {
-                                clipToEdit = clip
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .font(.system(size: 16))
-                                    .foregroundStyle(.white.opacity(0.6))
-                                    .frame(width: 36, height: 44)
-                            }
-                            .buttonStyle(.plain)
+                            .foregroundStyle(.white)
+                            .id(clip.id)
+                            .listRowBackground(
+                                clip.id == currentClipID
+                                    ? Color.white.opacity(0.12)
+                                    : Color.black
+                            )
                         }
-                        .foregroundStyle(.white)
+                        .onDelete(perform: deleteClips)
+                        .onMove(perform: reorderClips)
                     }
-                    .onDelete(perform: deleteClips)
-                    .onMove(perform: reorderClips)
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.black)
+                    .frame(maxHeight: .infinity)
+                    .environment(\.editMode, .constant(isEditing ? .active : .inactive))
+                    .onChange(of: currentClipID) { _, newID in
+                        guard let id = newID else { return }
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            proxy.scrollTo(id, anchor: .center)
+                        }
+                    }
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Color.black)
-                .frame(maxHeight: 200)
-                .environment(\.editMode, .constant(isEditing ? .active : .inactive))
 
                 Button {
                     Task { await exportVideo() }
@@ -157,7 +198,7 @@ struct PreviewView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .padding(.horizontal, 20)
-                .padding(.vertical, 16)
+                .padding(.vertical, 8)
                 .disabled(isExporting || sortedClips.isEmpty)
             }
         }
@@ -172,6 +213,7 @@ struct PreviewView: View {
             isPlaying = false
         }
         .onDisappear {
+            stopTimeObserver()
             applyOrientation(landscape: false)
         }
         .alert("Saved to Library", isPresented: $showExportSuccess) {
@@ -214,6 +256,10 @@ struct PreviewView: View {
     }
 
     private func rebuildPlayer() async {
+        stopTimeObserver()
+        let preservedTime = player?.currentTime()
+        isRebuildingPlayer = true
+        defer { isRebuildingPlayer = false }
         do {
             let musicURL = project.musicFilename.map { clipsDirectory().appendingPathComponent($0) }
             let result = try await CompositionService.buildComposition(
@@ -224,12 +270,39 @@ struct PreviewView: View {
             let item = AVPlayerItem(asset: result.composition)
             item.videoComposition = result.videoComposition
             item.audioMix = result.audioMix
-            player = AVPlayer(playerItem: item)
+            if let existingPlayer = player {
+                existingPlayer.replaceCurrentItem(with: item)
+            } else {
+                player = AVPlayer(playerItem: item)
+            }
+            if let time = preservedTime, time.isValid, time.seconds > 0 {
+                await player?.seek(to: time)
+            }
+            clipRanges = result.clipRanges
             isPlaying = false
+            startTimeObserver()
         } catch {
             exportError = error.localizedDescription
         }
         await loadThumbnails()
+    }
+
+    private func startTimeObserver() {
+        guard let player else { return }
+        let ranges = clipRanges
+        let interval = CMTime(value: 1, timescale: 10)
+        timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
+            let found = ranges.first {
+                CMTimeCompare(time, $0.start) >= 0 && CMTimeCompare(time, $0.end) < 0
+            }
+            currentClipID = found?.id ?? ranges.last?.id
+        }
+    }
+
+    private func stopTimeObserver() {
+        guard let token = timeObserverToken else { return }
+        player?.removeTimeObserver(token)
+        timeObserverToken = nil
     }
 
     private func loadThumbnails() async {
