@@ -288,14 +288,14 @@ enum CompositionService {
         return vc
     }
 
-    private static func orientedSize(naturalSize: CGSize, transform: CGAffineTransform) -> CGSize {
+    static func orientedSize(naturalSize: CGSize, transform: CGAffineTransform) -> CGSize {
         let isRotated = abs(transform.b) > 0.5
         return isRotated
             ? CGSize(width: naturalSize.height, height: naturalSize.width)
             : naturalSize
     }
 
-    private static func finalDisplaySize(naturalSize: CGSize, transform: CGAffineTransform, rotationOverride: Int) -> CGSize {
+    static func finalDisplaySize(naturalSize: CGSize, transform: CGAffineTransform, rotationOverride: Int) -> CGSize {
         let oriented = orientedSize(naturalSize: naturalSize, transform: transform)
         let swapDimensions = (rotationOverride / 90) % 2 != 0
         return swapDimensions
@@ -305,7 +305,7 @@ enum CompositionService {
 
     // Maps natural video coords -> composition render coords, incorporating
     // preferredTransform (camera orientation) + rotationOverride + scale/center.
-    private static func fitTransform(
+    static func fitTransform(
         naturalSize: CGSize,
         preferredTransform: CGAffineTransform,
         rotationOverride: Int,

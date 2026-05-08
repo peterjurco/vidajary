@@ -315,7 +315,8 @@ struct PreviewView: View {
             generator.maximumSize = CGSize(width: 120, height: 80)
             do {
                 let (cgImage, _) = try await generator.image(at: .zero)
-                thumbnails[clip.id] = UIImage(cgImage: cgImage)
+                let image = UIImage(cgImage: cgImage)
+                thumbnails[clip.id] = clip.rotationOverride == 0 ? image : image.rotated(by: clip.rotationOverride)
             } catch {
                 // Skip clips where thumbnail generation fails
             }
@@ -413,5 +414,20 @@ struct PreviewView: View {
         }
         let orientations: UIInterfaceOrientationMask = landscape ? .landscape : .portrait
         windowScene.requestGeometryUpdate(.iOS(interfaceOrientations: orientations)) { _ in }
+    }
+}
+
+private extension UIImage {
+    func rotated(by degrees: Int) -> UIImage {
+        guard degrees != 0 else { return self }
+        let radians = CGFloat(degrees) * .pi / 180
+        let newSize = CGRect(origin: .zero, size: size)
+            .applying(CGAffineTransform(rotationAngle: radians))
+            .integral.size
+        return UIGraphicsImageRenderer(size: newSize).image { ctx in
+            ctx.cgContext.translateBy(x: newSize.width / 2, y: newSize.height / 2)
+            ctx.cgContext.rotate(by: radians)
+            draw(in: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height))
+        }
     }
 }

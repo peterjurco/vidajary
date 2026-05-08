@@ -15,6 +15,7 @@ struct ClipEditView: View {
     @State private var filmstrip: [UIImage] = []
     @State private var isPlaying = false
     @State private var playerItem: AVPlayerItem?
+    @State private var clipAsset: AVURLAsset?
 
     @State private var localTrimStart: TimeInterval
     @State private var localTrimEnd: TimeInterval
@@ -242,11 +243,23 @@ struct ClipEditView: View {
         }
         .task {
             let asset = AVURLAsset(url: clipURL)
+            clipAsset = asset
             let item = AVPlayerItem(asset: asset)
+            if let vc = await buildRotationComposition(asset: asset, rotation: localRotation) {
+                item.videoComposition = vc
+            }
             playerItem = item
             player = AVPlayer(playerItem: item)
             _ = await player?.seek(to: CMTimeMakeWithSeconds(localTrimStart, preferredTimescale: 600))
             await loadFilmstrip(asset: asset)
+        }
+        .onChange(of: localRotation) { _, newRotation in
+            guard let asset = clipAsset else { return }
+            Task {
+                if let vc = await buildRotationComposition(asset: asset, rotation: newRotation) {
+                    playerItem?.videoComposition = vc
+                }
+            }
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -259,6 +272,31 @@ struct ClipEditView: View {
         .onDisappear {
             player?.pause()
         }
+    }
+
+    private func buildRotationComposition(asset: AVURLAsset, rotation: Int) async -> AVMutableVideoComposition? {
+        guard let videoTrack = try? await asset.loadTracks(withMediaType: .video).first,
+              let duration = try? await asset.load(.duration),
+              duration.seconds > 0 else { return nil }
+        let naturalSize = (try? await videoTrack.load(.naturalSize)) ?? .zero
+        let preferredTransform = (try? await videoTrack.load(.preferredTransform)) ?? .identity
+        let frameRate = (try? await videoTrack.load(.nominalFrameRate)) ?? 30
+        let renderSize = CompositionService.finalDisplaySize(
+            naturalSize: naturalSize, transform: preferredTransform, rotationOverride: rotation)
+        guard renderSize.width > 0, renderSize.height > 0 else { return nil }
+        let transform = CompositionService.fitTransform(
+            naturalSize: naturalSize, preferredTransform: preferredTransform,
+            rotationOverride: rotation, renderSize: renderSize)
+        let vc = AVMutableVideoComposition()
+        vc.renderSize = renderSize
+        vc.frameDuration = CMTime(value: 1, timescale: max(1, Int32(frameRate.rounded())))
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: duration)
+        let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+        layer.setTransform(transform, at: .zero)
+        instruction.layerInstructions = [layer]
+        vc.instructions = [instruction]
+        return vc
     }
 
     private func loadFilmstrip(asset: AVURLAsset) async {
