@@ -23,6 +23,7 @@ struct PreviewView: View {
     @State private var currentClipID: UUID?
     @State private var timeObserverToken: Any?
     @State private var clipRanges: [(id: UUID, start: CMTime, end: CMTime)] = []
+    @State private var pendingResumeTime: CMTime? = nil
 
     var sortedClips: [Clip] {
         project.clips.sorted { $0.sortOrder < $1.sortOrder }
@@ -231,7 +232,9 @@ struct PreviewView: View {
             ClipEditView(
                 clip: clip,
                 clipURL: clipsDirectory().appendingPathComponent(clip.filename),
-                project: project
+                project: project,
+                clipGlobalStart: clipRanges.first(where: { $0.id == clip.id })?.start ?? .zero,
+                resumeTime: $pendingResumeTime
             )
             .onDisappear {
                 Task { await rebuildPlayer() }
@@ -259,7 +262,8 @@ struct PreviewView: View {
 
     private func rebuildPlayer() async {
         stopTimeObserver()
-        let preservedTime = player?.currentTime()
+        let preservedTime = pendingResumeTime ?? player?.currentTime()
+        pendingResumeTime = nil
         isRebuildingPlayer = true
         defer { isRebuildingPlayer = false }
         do {

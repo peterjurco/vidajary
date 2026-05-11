@@ -7,6 +7,8 @@ struct ClipEditView: View {
     var clip: Clip
     let clipURL: URL
     var project: Project
+    var clipGlobalStart: CMTime = .zero
+    @Binding var resumeTime: CMTime?
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -23,10 +25,12 @@ struct ClipEditView: View {
     @State private var localClipVolume: Float
     @State private var localMusicVolume: Float
 
-    init(clip: Clip, clipURL: URL, project: Project) {
+    init(clip: Clip, clipURL: URL, project: Project, clipGlobalStart: CMTime = .zero, resumeTime: Binding<CMTime?> = .constant(nil)) {
         self.clip = clip
         self.clipURL = clipURL
         self.project = project
+        self.clipGlobalStart = clipGlobalStart
+        _resumeTime = resumeTime
         _localTrimStart = State(initialValue: clip.trimStart)
         _localTrimEnd = State(
             initialValue: min(clip.duration, clip.trimEnd > 0 ? clip.trimEnd : clip.duration)
@@ -316,6 +320,10 @@ struct ClipEditView: View {
         second.clipVolume = localClipVolume
         second.musicVolume = localMusicVolume
         project.clips.append(second)
+
+        // Tell PreviewView to resume at the split point in the global timeline
+        let localOffset = CMTimeMakeWithSeconds(splitSeconds - localTrimStart, preferredTimescale: 600)
+        resumeTime = CMTimeAdd(clipGlobalStart, localOffset)
 
         try? context.save()
         dismiss()
