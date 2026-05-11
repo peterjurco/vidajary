@@ -54,6 +54,14 @@ struct ClipEditView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
                     Spacer()
+                    Button {
+                        splitClip()
+                    } label: {
+                        Image(systemName: "scissors")
+                            .font(.system(size: 18))
+                            .foregroundStyle(.yellow.opacity(0.85))
+                            .frame(width: 44, height: 44)
+                    }
                     Button("Done") {
                         clip.trimStart = localTrimStart
                         clip.trimEnd = localTrimEnd
@@ -276,6 +284,41 @@ struct ClipEditView: View {
         .onDisappear {
             player?.pause()
         }
+    }
+
+    private func splitClip() {
+        guard let splitSeconds = player?.currentTime().seconds,
+              splitSeconds > localTrimStart + 0.1,
+              splitSeconds < localTrimEnd - 0.1 else { return }
+
+        // Save current edits into the first segment
+        clip.trimStart = localTrimStart
+        clip.trimEnd = splitSeconds
+        clip.rotationOverride = localRotation
+        clip.clipVolume = localClipVolume
+        clip.musicVolume = localMusicVolume
+
+        // Shift sort orders of everything after this clip
+        for c in project.clips where c.sortOrder > clip.sortOrder {
+            c.sortOrder += 1
+        }
+
+        // Create second segment referencing the same source file
+        let second = Clip(
+            filename: clip.filename,
+            duration: clip.duration,
+            sortOrder: clip.sortOrder + 1,
+            recordedAt: clip.recordedAt
+        )
+        second.trimStart = splitSeconds
+        second.trimEnd = localTrimEnd
+        second.rotationOverride = localRotation
+        second.clipVolume = localClipVolume
+        second.musicVolume = localMusicVolume
+        project.clips.append(second)
+
+        try? context.save()
+        dismiss()
     }
 
     private func buildRotationComposition(asset: AVURLAsset, rotation: Int) async -> AVMutableVideoComposition? {
