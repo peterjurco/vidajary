@@ -79,6 +79,7 @@ struct ClipEditView: View {
                     }
                     if !isPlaying {
                         Button {
+                            playerItem?.forwardPlaybackEndTime = CMTimeMakeWithSeconds(localTrimEnd, preferredTimescale: 600)
                             player?.seek(to: CMTimeMakeWithSeconds(localTrimStart, preferredTimescale: 600))
                             player?.play()
                             isPlaying = true
@@ -252,6 +253,9 @@ struct ClipEditView: View {
             player = AVPlayer(playerItem: item)
             _ = await player?.seek(to: CMTimeMakeWithSeconds(localTrimStart, preferredTimescale: 600))
             await loadFilmstrip(asset: asset)
+        }
+        .onChange(of: localTrimEnd) { _, newEnd in
+            playerItem?.forwardPlaybackEndTime = CMTimeMakeWithSeconds(newEnd, preferredTimescale: 600)
         }
         .onChange(of: localRotation) { _, newRotation in
             guard let asset = clipAsset else { return }
