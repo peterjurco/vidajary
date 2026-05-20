@@ -14,6 +14,9 @@ struct ProjectSettingsSheet: View {
     @State private var archiveURL: URL?
     @State private var showShareSheet = false
     @State private var exportError: String?
+    @State private var exportResult: ExportResult? = nil
+
+    enum ExportResult { case success, failure(String) }
 
     var body: some View {
         NavigationStack {
@@ -79,8 +82,27 @@ struct ProjectSettingsSheet: View {
             }
             .sheet(isPresented: $showShareSheet) {
                 if let url = archiveURL {
-                    ShareSheet(items: [url])
-                        .onAppear { isExporting = false }
+                    ShareSheet(items: [url]) { completed, error in
+                        if let error {
+                            exportResult = .failure(error.localizedDescription)
+                        } else if completed {
+                            exportResult = .success
+                        }
+                        // cancelled (completed == false, error == nil): no feedback
+                    }
+                    .onAppear { isExporting = false }
+                }
+            }
+            .alert(
+                exportResult == .success ? "Exported Successfully" : "Export Failed",
+                isPresented: .init(get: { exportResult != nil }, set: { if !$0 { exportResult = nil } })
+            ) {
+                Button("OK") { exportResult = nil }
+            } message: {
+                if case .failure(let msg) = exportResult {
+                    Text(msg)
+                } else {
+                    Text("The archive was saved successfully.")
                 }
             }
         }
@@ -126,9 +148,14 @@ struct ProjectSettingsSheet: View {
 
 private struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
+    var onComplete: (Bool, Error?) -> Void = { _, _ in }
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        vc.completionWithItemsHandler = { _, completed, _, error in
+            onComplete(completed, error)
+        }
+        return vc
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
