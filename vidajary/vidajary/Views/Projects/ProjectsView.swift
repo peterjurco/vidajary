@@ -11,6 +11,8 @@ struct ProjectsView: View {
     @State private var projectForSettings: Project? = nil
     @State private var projectThumbnails: [UUID: UIImage] = [:]
     @State private var projectForPreview: Project? = nil
+    @State private var showImporter = false
+    @State private var importError: String?
 
     var body: some View {
         NavigationStack {
@@ -80,6 +82,13 @@ struct ProjectsView: View {
                         Image(systemName: "plus")
                     }
                 }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showImporter = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                    }
+                }
             }
             .sheet(isPresented: $showNewProject) {
                 NewProjectSheet { project in
@@ -96,6 +105,26 @@ struct ProjectsView: View {
             }
             .fullScreenCover(item: $projectForPreview) { project in
                 PreviewView(project: project)
+            }
+            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
+                guard case .success(let urls) = result, let url = urls.first else { return }
+                let accessing = url.startAccessingSecurityScopedResource()
+                Task {
+                    defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                    do {
+                        try ArchiveService.importArchive(from: url, context: context)
+                    } catch {
+                        importError = error.localizedDescription
+                    }
+                }
+            }
+            .alert("Import Failed", isPresented: .init(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )) {
+                Button("OK") { importError = nil }
+            } message: {
+                Text(importError ?? "")
             }
         }
     }
