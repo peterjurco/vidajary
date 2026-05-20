@@ -74,7 +74,9 @@ enum ArchiveService {
         }
 
         try? FileManager.default.removeItem(at: outputURL)
-        FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+        guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
+            throw ArchiveError.writeFailed
+        }
         let out = try FileHandle(forWritingTo: outputURL)
         defer { try? out.close() }
 
@@ -96,18 +98,18 @@ enum ArchiveService {
             let nameData = Data(entry.zipPath.utf8)
 
             // Local file header — sizes/CRC are zero; data descriptor carries real values (bit 3)
-            out.write(sig(0x04034b50))
-            out.write(le16(20))          // version needed
-            out.write(le16(0x0008))      // general purpose: data descriptor present
-            out.write(le16(0))           // compression: STORE
-            out.write(le16(dosTime))
-            out.write(le16(dosDate))
-            out.write(le32(0))           // CRC placeholder
-            out.write(le32(0))           // compressed size placeholder
-            out.write(le32(0))           // uncompressed size placeholder
-            out.write(le16(UInt16(nameData.count)))
-            out.write(le16(0))           // extra field length
-            out.write(nameData)
+            try out.write(contentsOf: sig(0x04034b50))
+            try out.write(contentsOf: le16(20))          // version needed
+            try out.write(contentsOf: le16(0x0008))      // general purpose: data descriptor present
+            try out.write(contentsOf: le16(0))           // compression: STORE
+            try out.write(contentsOf: le16(dosTime))
+            try out.write(contentsOf: le16(dosDate))
+            try out.write(contentsOf: le32(0))           // CRC placeholder
+            try out.write(contentsOf: le32(0))           // compressed size placeholder
+            try out.write(contentsOf: le32(0))           // uncompressed size placeholder
+            try out.write(contentsOf: le16(UInt16(nameData.count)))
+            try out.write(contentsOf: le16(0))           // extra field length
+            try out.write(contentsOf: nameData)
 
             // File data — stream and accumulate CRC
             var crc: uLong = zlib.crc32(0, nil, 0)
@@ -117,7 +119,7 @@ enum ArchiveService {
                 data.withUnsafeBytes { ptr in
                     crc = zlib.crc32(crc, ptr.baseAddress?.assumingMemoryBound(to: Bytef.self), uInt(data.count))
                 }
-                out.write(data)
+                try out.write(contentsOf: data)
                 written = UInt64(data.count)
             } else if let url = entry.url {
                 let inp = try FileHandle(forReadingFrom: url)
@@ -128,7 +130,7 @@ enum ArchiveService {
                     chunk.withUnsafeBytes { ptr in
                         crc = zlib.crc32(crc, ptr.baseAddress?.assumingMemoryBound(to: Bytef.self), uInt(chunk.count))
                     }
-                    out.write(chunk)
+                    try out.write(contentsOf: chunk)
                     written += UInt64(chunk.count)
                 }
             }
@@ -136,10 +138,10 @@ enum ArchiveService {
             let finalCRC = UInt32(crc & 0xFFFFFFFF)
 
             // Data descriptor (signature + CRC + sizes)
-            out.write(sig(0x08074b50))
-            out.write(le32(finalCRC))
-            out.write(le32(UInt32(written & 0xFFFFFFFF)))
-            out.write(le32(UInt32(written & 0xFFFFFFFF)))
+            try out.write(contentsOf: sig(0x08074b50))
+            try out.write(contentsOf: le32(finalCRC))
+            try out.write(contentsOf: le32(UInt32(written & 0xFFFFFFFF)))
+            try out.write(contentsOf: le32(UInt32(written & 0xFFFFFFFF)))
 
             cdEntries.append(CDEntry(zipPath: entry.zipPath, crc: finalCRC, size: written,
                                      localOffset: localOffset, dosTime: dosTime, dosDate: dosDate))
@@ -149,37 +151,37 @@ enum ArchiveService {
         let cdOffset = (try? out.offset()) ?? 0
         for cd in cdEntries {
             let nameData = Data(cd.zipPath.utf8)
-            out.write(sig(0x02014b50))
-            out.write(le16(0x0314))      // version made by: Unix 3.0
-            out.write(le16(20))          // version needed
-            out.write(le16(0x0008))      // data descriptor flag
-            out.write(le16(0))           // STORE
-            out.write(le16(cd.dosTime))
-            out.write(le16(cd.dosDate))
-            out.write(le32(cd.crc))
-            out.write(le32(UInt32(cd.size & 0xFFFFFFFF)))
-            out.write(le32(UInt32(cd.size & 0xFFFFFFFF)))
-            out.write(le16(UInt16(nameData.count)))
-            out.write(le16(0))           // extra
-            out.write(le16(0))           // comment
-            out.write(le16(0))           // disk start
-            out.write(le16(0))           // internal attrs
-            out.write(le32(0))           // external attrs
-            out.write(le32(UInt32(cd.localOffset & 0xFFFFFFFF)))
-            out.write(nameData)
+            try out.write(contentsOf: sig(0x02014b50))
+            try out.write(contentsOf: le16(0x0314))      // version made by: Unix 3.0
+            try out.write(contentsOf: le16(20))          // version needed
+            try out.write(contentsOf: le16(0x0008))      // data descriptor flag
+            try out.write(contentsOf: le16(0))           // STORE
+            try out.write(contentsOf: le16(cd.dosTime))
+            try out.write(contentsOf: le16(cd.dosDate))
+            try out.write(contentsOf: le32(cd.crc))
+            try out.write(contentsOf: le32(UInt32(cd.size & 0xFFFFFFFF)))
+            try out.write(contentsOf: le32(UInt32(cd.size & 0xFFFFFFFF)))
+            try out.write(contentsOf: le16(UInt16(nameData.count)))
+            try out.write(contentsOf: le16(0))           // extra
+            try out.write(contentsOf: le16(0))           // comment
+            try out.write(contentsOf: le16(0))           // disk start
+            try out.write(contentsOf: le16(0))           // internal attrs
+            try out.write(contentsOf: le32(0))           // external attrs
+            try out.write(contentsOf: le32(UInt32(cd.localOffset & 0xFFFFFFFF)))
+            try out.write(contentsOf: nameData)
         }
         let cdEnd = (try? out.offset()) ?? 0
         let cdSize = cdEnd - cdOffset
 
         // End of central directory
-        out.write(sig(0x06054b50))
-        out.write(le16(0))               // disk number
-        out.write(le16(0))               // disk with CD
-        out.write(le16(UInt16(cdEntries.count)))
-        out.write(le16(UInt16(cdEntries.count)))
-        out.write(le32(UInt32(cdSize & 0xFFFFFFFF)))
-        out.write(le32(UInt32(cdOffset & 0xFFFFFFFF)))
-        out.write(le16(0))               // comment length
+        try out.write(contentsOf: sig(0x06054b50))
+        try out.write(contentsOf: le16(0))               // disk number
+        try out.write(contentsOf: le16(0))               // disk with CD
+        try out.write(contentsOf: le16(UInt16(cdEntries.count)))
+        try out.write(contentsOf: le16(UInt16(cdEntries.count)))
+        try out.write(contentsOf: le32(UInt32(cdSize & 0xFFFFFFFF)))
+        try out.write(contentsOf: le32(UInt32(cdOffset & 0xFFFFFFFF)))
+        try out.write(contentsOf: le16(0))               // comment length
     }
 
     // MARK: - Import
@@ -256,14 +258,16 @@ enum ArchiveService {
 
             if let dest = destURL {
                 try? FileManager.default.removeItem(at: dest)
-                FileManager.default.createFile(atPath: dest.path, contents: nil)
+                guard FileManager.default.createFile(atPath: dest.path, contents: nil) else {
+                    throw ArchiveError.writeFailed
+                }
                 let out = try FileHandle(forWritingTo: dest)
                 defer { try? out.close() }
                 var remaining = Int(record.size)
                 while remaining > 0 {
                     let chunk = handle.readData(ofLength: min(remaining, chunkSize))
                     guard !chunk.isEmpty else { throw ArchiveError.truncated }
-                    out.write(chunk)
+                    try out.write(contentsOf: chunk)
                     remaining -= chunk.count
                 }
                 return nil
@@ -336,11 +340,12 @@ enum ArchiveService {
     // MARK: - Errors
 
     enum ArchiveError: LocalizedError {
-        case invalidFormat, truncated
+        case invalidFormat, truncated, writeFailed
         var errorDescription: String? {
             switch self {
             case .invalidFormat: return "Not a valid Vidajary archive."
             case .truncated: return "The archive appears to be incomplete."
+            case .writeFailed: return "Not enough storage space to complete the operation."
             }
         }
     }
