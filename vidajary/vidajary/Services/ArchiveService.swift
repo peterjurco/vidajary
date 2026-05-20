@@ -245,9 +245,6 @@ enum ArchiveService {
 
         guard !records.isEmpty else { throw ArchiveError.invalidFormat }
 
-        print("[Archive] Parsed \(records.count) CD records:")
-        for r in records { print("  path='\(r.zipPath)' size=\(r.size) offset=\(r.localOffset)") }
-
         // Helper: read a file entry from the zip into destURL (nil = return Data)
         func extractEntry(_ record: CDRecord, to destURL: URL? = nil) throws -> Data? {
             try handle.seek(toOffset: record.localOffset)
@@ -273,8 +270,6 @@ enum ArchiveService {
                     try out.write(contentsOf: chunk)
                     remaining -= chunk.count
                 }
-                let written = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int) ?? -1
-                print("[Archive] Extracted '\(record.zipPath)' → size on disk: \(written)")
                 return nil
             } else {
                 return handle.readData(ofLength: Int(record.size))
@@ -290,20 +285,13 @@ enum ArchiveService {
         decoder.dateDecodingStrategy = .iso8601
         let metadata = try decoder.decode(ProjectArchiveMetadata.self, from: metaData)
 
-        print("[Archive] metadata clips: \(metadata.clips.map(\.filename))")
-
         // Extract clip files
         for clipMeta in metadata.clips {
-            let lookupKey = "clips/\(clipMeta.filename)"
-            if let record = records.first(where: { $0.zipPath == lookupKey }) {
+            if let record = records.first(where: { $0.zipPath == "clips/\(clipMeta.filename)" }) {
                 let dest = dir.appendingPathComponent(clipMeta.filename)
-                let exists = FileManager.default.fileExists(atPath: dest.path)
-                print("[Archive] clip '\(clipMeta.filename)': record found (size=\(record.size)), fileExists=\(exists)")
-                if !exists {
+                if !FileManager.default.fileExists(atPath: dest.path) {
                     try extractEntry(record, to: dest)
                 }
-            } else {
-                print("[Archive] clip '\(clipMeta.filename)': NO RECORD FOUND for key '\(lookupKey)'")
             }
         }
 

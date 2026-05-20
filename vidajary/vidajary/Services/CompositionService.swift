@@ -115,64 +115,50 @@ enum CompositionService {
 
         for clip in sortedClips {
             let url = directory.appendingPathComponent(clip.filename)
-            let fileExists = FileManager.default.fileExists(atPath: url.path)
-            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? -1
-            print("[Composition] clip '\(clip.filename)' exists=\(fileExists) size=\(fileSize)")
             let asset = AVURLAsset(url: url)
 
             let fullDuration: CMTime
             do { fullDuration = try await asset.load(.duration) }
-            catch { print("[Composition] THROW load(.duration) '\(clip.filename)': \(error)"); throw error }
+            catch { continue }  // skip damaged or missing clips
 
-            guard fullDuration.isValid, fullDuration.seconds > 0 else { print("[Composition] skip invalid duration"); continue }
+            guard fullDuration.isValid, fullDuration.seconds > 0 else { continue }
 
             let trimStartTime = CMTimeMakeWithSeconds(clip.trimStart, preferredTimescale: 600)
             let trimEndSeconds = clip.trimEnd > 0 ? clip.trimEnd : fullDuration.seconds
             let trimEndTime = CMTimeMakeWithSeconds(trimEndSeconds, preferredTimescale: 600)
             let trimmedDuration = CMTimeSubtract(trimEndTime, trimStartTime)
-            guard trimmedDuration.seconds > 0 else { print("[Composition] skip zero trimmedDuration"); continue }
+            guard trimmedDuration.seconds > 0 else { continue }
             let sourceRange = CMTimeRange(start: trimStartTime, duration: trimmedDuration)
 
-            let videoTracks: [AVAssetTrack]
-            do { videoTracks = try await asset.loadTracks(withMediaType: .video) }
-            catch { print("[Composition] THROW loadVideoTracks '\(clip.filename)': \(error)"); throw error }
+            guard let srcVideo = try? await asset.loadTracks(withMediaType: .video).first else { continue }
+            guard (try? videoTrack.insertTimeRange(sourceRange, of: srcVideo, at: cursor)) != nil else { continue }
 
-            if let srcVideo = videoTracks.first {
-                do { try videoTrack.insertTimeRange(sourceRange, of: srcVideo, at: cursor) }
-                catch { print("[Composition] THROW insertVideoTimeRange '\(clip.filename)': \(error)"); throw error }
-                let naturalSize = try await srcVideo.load(.naturalSize)
-                let preferredTransform = try await srcVideo.load(.preferredTransform)
-                if renderSize == nil {
-                    renderSize = finalDisplaySize(
-                        naturalSize: naturalSize,
-                        transform: preferredTransform,
-                        rotationOverride: clip.rotationOverride
-                    )
-                    frameRate = try await srcVideo.load(.nominalFrameRate)
-                }
-                clipInfos.append((
-                    timeRange: CMTimeRange(start: cursor, duration: trimmedDuration),
+            let naturalSize = try await srcVideo.load(.naturalSize)
+            let preferredTransform = try await srcVideo.load(.preferredTransform)
+            if renderSize == nil {
+                renderSize = finalDisplaySize(
                     naturalSize: naturalSize,
-                    preferredTransform: preferredTransform,
+                    transform: preferredTransform,
                     rotationOverride: clip.rotationOverride
-                ))
+                )
+                frameRate = try await srcVideo.load(.nominalFrameRate)
             }
+            clipInfos.append((
+                timeRange: CMTimeRange(start: cursor, duration: trimmedDuration),
+                naturalSize: naturalSize,
+                preferredTransform: preferredTransform,
+                rotationOverride: clip.rotationOverride
+            ))
 
             var hasAudio = false
-            let audioTracks: [AVAssetTrack]
-            do { audioTracks = try await asset.loadTracks(withMediaType: .audio) }
-            catch { print("[Composition] THROW loadAudioTracks '\(clip.filename)': \(error)"); throw error }
-
-            if let srcAudio = audioTracks.first {
-                do { try audioTrack?.insertTimeRange(sourceRange, of: srcAudio, at: cursor) }
-                catch { print("[Composition] THROW insertAudioTimeRange '\(clip.filename)': \(error)"); throw error }
+            if let srcAudio = try? await asset.loadTracks(withMediaType: .audio).first,
+               (try? audioTrack?.insertTimeRange(sourceRange, of: srcAudio, at: cursor)) != nil {
                 audioInserted = true
                 hasAudio = true
             }
 
             let clipStart = cursor
             cursor = CMTimeAdd(cursor, trimmedDuration)
-            print("[Composition] clip OK duration=\(fullDuration.seconds) trimmed=\(trimmedDuration.seconds)")
 
             clipTimelineInfos.append(ClipTimelineInfo(
                 startTime: clipStart,
@@ -189,26 +175,17 @@ enum CompositionService {
         var musicCompositionTrack: AVMutableCompositionTrack? = nil
         if let musicURL {
             let musicAsset = AVURLAsset(url: musicURL)
-            print("[Composition] music url=\(musicURL.lastPathComponent) exists=\(FileManager.default.fileExists(atPath: musicURL.path))")
-            if let srcMusic = try? await musicAsset.loadTracks(withMediaType: .audio).first {
-                print("[Composition] music loadTracks OK, loading duration")
-                let musicDuration: CMTime
-                do { musicDuration = try await musicAsset.load(.duration) }
-                catch { print("[Composition] THROW music load(.duration): \(error)"); throw error }
+            if let srcMusic = try? await musicAsset.loadTracks(withMediaType: .audio).first,
+               let musicDuration = try? await musicAsset.load(.duration) {
                 let effectiveMusicDuration = CMTimeMinimum(musicDuration, cursor)
                 let mt = composition.addMutableTrack(
                     withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid
                 )
-                do {
-                    try mt?.insertTimeRange(
-                        CMTimeRange(start: .zero, duration: effectiveMusicDuration),
-                        of: srcMusic, at: .zero
-                    )
-                } catch { print("[Composition] THROW music insertTimeRange: \(error)"); throw error }
+                try? mt?.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: effectiveMusicDuration),
+                    of: srcMusic, at: .zero
+                )
                 musicCompositionTrack = mt
-                print("[Composition] music track inserted OK")
-            } else {
-                print("[Composition] music loadTracks returned nil (file missing or unreadable)")
             }
         }
 
