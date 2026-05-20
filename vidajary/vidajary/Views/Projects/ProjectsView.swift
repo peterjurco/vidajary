@@ -13,6 +13,7 @@ struct ProjectsView: View {
     @State private var projectForPreview: Project? = nil
     @State private var showImporter = false
     @State private var importError: String?
+    @State private var pendingDeleteOffsets: IndexSet? = nil
 
     var body: some View {
         NavigationStack {
@@ -70,7 +71,7 @@ struct ProjectsView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .onDelete(perform: deleteProjects)
+                .onDelete { pendingDeleteOffsets = $0 }
             }
             .task {
                 await loadThumbnails()
@@ -125,6 +126,21 @@ struct ProjectsView: View {
                 Button("OK") { importError = nil }
             } message: {
                 Text(importError ?? "")
+            }
+            .confirmationDialog(
+                pendingDeleteOffsets.flatMap { $0.first }.map { "Delete \"\(projects[$0].name)\"?" } ?? "Delete Project?",
+                isPresented: .init(get: { pendingDeleteOffsets != nil }, set: { if !$0 { pendingDeleteOffsets = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Delete Project", role: .destructive) {
+                    if let offsets = pendingDeleteOffsets {
+                        deleteProjects(at: offsets)
+                    }
+                    pendingDeleteOffsets = nil
+                }
+                Button("Cancel", role: .cancel) { pendingDeleteOffsets = nil }
+            } message: {
+                Text("All clips will be permanently deleted. Export an archive first if you want to preserve this project.")
             }
         }
     }
