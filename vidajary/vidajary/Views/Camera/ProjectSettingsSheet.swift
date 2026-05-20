@@ -14,7 +14,6 @@ struct ProjectSettingsSheet: View {
     @State private var archiveURL: URL?
     @State private var showShareSheet = false
     @State private var exportError: String?
-    @State private var showDeleteAfterExport = false
 
     var body: some View {
         NavigationStack {
@@ -35,12 +34,8 @@ struct ProjectSettingsSheet: View {
                         }
                     } else {
                         Button("Export Archive") {
-                            startExport(thenDelete: false)
+                            startExport()
                         }
-                        Button("Archive & Delete") {
-                            startExport(thenDelete: true)
-                        }
-                        .foregroundStyle(.orange)
                     }
                 }
 
@@ -72,19 +67,7 @@ struct ProjectSettingsSheet: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("All clips will be permanently deleted.")
-            }
-            .confirmationDialog(
-                "Free Up Space?",
-                isPresented: $showDeleteAfterExport,
-                titleVisibility: .visible
-            ) {
-                Button("Delete from Device", role: .destructive) {
-                    deleteProject()
-                }
-                Button("Keep on Device", role: .cancel) {}
-            } message: {
-                Text("Archive saved. Delete this project from your device to free up storage?")
+                Text("All clips will be permanently deleted. Export an archive first if you want to preserve this project.")
             }
             .alert("Export Failed", isPresented: .init(
                 get: { exportError != nil },
@@ -96,24 +79,16 @@ struct ProjectSettingsSheet: View {
             }
             .sheet(isPresented: $showShareSheet) {
                 if let url = archiveURL {
-                    ShareSheet(items: [url]) { completed in
-                        if completed && showDeleteAfterExportPending {
-                            showDeleteAfterExport = true
-                        }
-                        showDeleteAfterExportPending = false
-                    }
+                    ShareSheet(items: [url])
+                        .onAppear { isExporting = false }
                 }
             }
         }
     }
 
-    @State private var showDeleteAfterExportPending = false
-
-    private func startExport(thenDelete: Bool) {
-        showDeleteAfterExportPending = thenDelete
+    private func startExport() {
         isExporting = true
         Task {
-            defer { isExporting = false }
             let safeName = project.name
                 .components(separatedBy: CharacterSet(charactersIn: "/\\:*?\"<>|"))
                 .joined(separator: "-")
@@ -124,9 +99,10 @@ struct ProjectSettingsSheet: View {
                 try ArchiveService.export(project: project, to: tempURL)
                 archiveURL = tempURL
                 showShareSheet = true
+                // isExporting cleared in sheet's onAppear to avoid gap before sheet presents
             } catch {
+                isExporting = false
                 exportError = error.localizedDescription
-                showDeleteAfterExportPending = false
             }
         }
     }
@@ -150,14 +126,9 @@ struct ProjectSettingsSheet: View {
 
 private struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
-    var onComplete: (Bool) -> Void = { _ in }
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        vc.completionWithItemsHandler = { _, completed, _, _ in
-            onComplete(completed)
-        }
-        return vc
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

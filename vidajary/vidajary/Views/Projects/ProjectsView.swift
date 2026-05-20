@@ -86,7 +86,7 @@ struct ProjectsView: View {
                     Button {
                         showImporter = true
                     } label: {
-                        Image(systemName: "square.and.arrow.down")
+                        Label("Import", systemImage: "square.and.arrow.down")
                     }
                 }
             }
