@@ -115,6 +115,9 @@ enum CompositionService {
 
         for clip in sortedClips {
             let url = directory.appendingPathComponent(clip.filename)
+            let fileExists = FileManager.default.fileExists(atPath: url.path)
+            let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? -1
+            print("[Composition] opening clip '\(clip.filename)' exists=\(fileExists) size=\(fileSize)")
             let asset = AVURLAsset(url: url)
             let fullDuration = try await asset.load(.duration)
             guard fullDuration.isValid, fullDuration.seconds > 0 else { continue }
