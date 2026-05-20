@@ -22,7 +22,7 @@ struct ContentView: View {
                 ProjectsView(activeProject: $activeProject)
             }
         }
-        .onChange(of: activeProject) { _, newProject in
+        .onChange(of: activeProject) { _, newProject in 
             lastActiveProjectID = newProject?.id.uuidString ?? ""
             if newProject != nil {
                 showProjects = false
