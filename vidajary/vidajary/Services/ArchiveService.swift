@@ -256,12 +256,6 @@ enum ArchiveService {
             let extraLen = lhPrefix.le16(at: 28)
             handle.readData(ofLength: Int(nameLen) + Int(extraLen)) // skip name + extra
 
-            // Peek at first 8 bytes of file data to verify position
-            let peek = handle.readData(ofLength: 8)
-            let peekHex = peek.map { String(format: "%02x", $0) }.joined(separator: " ")
-            let dataStartOffset = (try? handle.offset()).map { $0 - UInt64(peek.count) } ?? 0
-            print("[Archive] '\(record.zipPath)' localOffset=\(record.localOffset) cdSize=\(record.size) nameLen=\(nameLen) extraLen=\(extraLen) dataStart=\(dataStartOffset) first8=[\(peekHex)]")
-
             if let dest = destURL {
                 try? FileManager.default.removeItem(at: dest)
                 guard FileManager.default.createFile(atPath: dest.path, contents: nil) else {
@@ -269,22 +263,16 @@ enum ArchiveService {
                 }
                 let out = try FileHandle(forWritingTo: dest)
                 defer { try? out.close() }
-                // Write the peeked bytes first, then continue
-                try out.write(contentsOf: peek)
-                var remaining = Int(record.size) - peek.count
+                var remaining = Int(record.size)
                 while remaining > 0 {
                     let chunk = handle.readData(ofLength: min(remaining, chunkSize))
                     guard !chunk.isEmpty else { throw ArchiveError.truncated }
                     try out.write(contentsOf: chunk)
                     remaining -= chunk.count
                 }
-                let diskSize = (try? FileManager.default.attributesOfItem(atPath: dest.path)[.size] as? Int) ?? -1
-                print("[Archive] extracted '\(record.zipPath)' diskSize=\(diskSize)")
                 return nil
             } else {
-                // For in-memory reads (e.g. metadata.json), combine peek + rest
-                let rest = handle.readData(ofLength: max(0, Int(record.size) - peek.count))
-                return peek + rest
+                return handle.readData(ofLength: Int(record.size))
             }
         }
 
