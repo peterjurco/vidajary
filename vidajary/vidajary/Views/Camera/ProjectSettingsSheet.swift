@@ -119,7 +119,7 @@ struct ProjectSettingsSheet: View {
                 .joined(separator: "-")
             let filename = safeName.isEmpty ? "archive" : safeName
             let tempURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(filename).vidajary")
+                .appendingPathComponent("\(filename).zip")
             do {
                 try ArchiveService.export(project: project, to: tempURL)
                 archiveURL = tempURL
