@@ -16,7 +16,7 @@ struct ProjectSettingsSheet: View {
     @State private var exportError: String?
     @State private var exportResult: ExportResult? = nil
 
-    enum ExportResult { case success, failure(String) }
+    enum ExportResult: Equatable { case success, failure(String) }
 
     var body: some View {
         NavigationStack {
