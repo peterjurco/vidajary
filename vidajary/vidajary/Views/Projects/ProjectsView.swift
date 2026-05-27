@@ -59,7 +59,6 @@ struct ProjectsView: View {
                                 .frame(width: 44, height: 44)
                         }
                         .buttonStyle(.plain)
-                        .disabled(project.clips.isEmpty)
 
                         Button {
                             projectForSettings = project
