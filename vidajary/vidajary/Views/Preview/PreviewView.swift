@@ -76,7 +76,7 @@ struct PreviewView: View {
                                 .font(.caption)
                                 .foregroundStyle(.white.opacity(0.7))
                         }
-                    } else if !isPlaying {
+                    } else if !isPlaying && !sortedClips.isEmpty {
                         Button {
                             player?.play()
                             isPlaying = true
@@ -94,78 +94,109 @@ struct PreviewView: View {
                 }
 
                 // Clip list with swipe-to-delete
-                ScrollViewReader { proxy in
-                    List {
-                        ForEach(sortedClips) { clip in
-                            HStack {
-                                if let thumbnail = thumbnails[clip.id] {
-                                    Image(uiImage: thumbnail)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 60, height: 40)
-                                        .clipped()
-                                        .cornerRadius(4)
-                                } else {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(Color.gray.opacity(0.3))
-                                        .frame(width: 60, height: 40)
-                                }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(clip.recordedAt.formatted(date: .abbreviated, time: .shortened))
-                                        .font(.subheadline)
-                                    Text(formattedDuration((clip.trimEnd > 0 ? clip.trimEnd : clip.duration) - clip.trimStart))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Button {
-                                    if let range = clipRanges.first(where: { $0.id == clip.id }) {
-                                        player?.seek(to: range.start)
-                                        player?.play()
-                                        isPlaying = true
-                                    }
-                                } label: {
-                                    Image(systemName: "play.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(.white.opacity(0.6))
-                                        .frame(width: 32, height: 44)
-                                }
-                                .buttonStyle(.plain)
-                                Button {
-                                    player?.pause()
-                                    isPlaying = false
-                                    clipToEdit = clip
-                                } label: {
-                                    Image(systemName: "square.and.pencil")
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(.white.opacity(0.6))
-                                        .frame(width: 36, height: 44)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .foregroundStyle(.white)
-                            .id(clip.id)
-                            .listRowBackground(
-                                clip.id == currentClipID
-                                    ? Color.white.opacity(0.12)
-                                    : Color.black
-                            )
+                if sortedClips.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "film")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.white.opacity(0.25))
+                        VStack(spacing: 4) {
+                            Text("No clips yet")
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                            Text("Add videos from your library to get started")
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.5))
+                                .multilineTextAlignment(.center)
                         }
-                        .onDelete(perform: deleteClips)
-                        .onMove(perform: reorderClips)
+                        Button {
+                            showLibraryPicker = true
+                        } label: {
+                            Label("Add from Library", systemImage: "plus.circle")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(Color.white.opacity(0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.black)
-                    .frame(maxHeight: .infinity)
-                    .environment(\.editMode, .constant(isEditing ? .active : .inactive))
-                    .onChange(of: currentClipID) { _, newID in
-                        guard let id = newID else { return }
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            proxy.scrollTo(id, anchor: .center)
+                } else {
+                    ScrollViewReader { proxy in
+                        List {
+                            ForEach(sortedClips) { clip in
+                                HStack {
+                                    if let thumbnail = thumbnails[clip.id] {
+                                        Image(uiImage: thumbnail)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 60, height: 40)
+                                            .clipped()
+                                            .cornerRadius(4)
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(Color.gray.opacity(0.3))
+                                            .frame(width: 60, height: 40)
+                                    }
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(clip.recordedAt.formatted(date: .abbreviated, time: .shortened))
+                                            .font(.subheadline)
+                                        Text(formattedDuration((clip.trimEnd > 0 ? clip.trimEnd : clip.duration) - clip.trimStart))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Button {
+                                        if let range = clipRanges.first(where: { $0.id == clip.id }) {
+                                            player?.seek(to: range.start)
+                                            player?.play()
+                                            isPlaying = true
+                                        }
+                                    } label: {
+                                        Image(systemName: "play.fill")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.white.opacity(0.6))
+                                            .frame(width: 32, height: 44)
+                                    }
+                                    .buttonStyle(.plain)
+                                    Button {
+                                        player?.pause()
+                                        isPlaying = false
+                                        clipToEdit = clip
+                                    } label: {
+                                        Image(systemName: "square.and.pencil")
+                                            .font(.system(size: 16))
+                                            .foregroundStyle(.white.opacity(0.6))
+                                            .frame(width: 36, height: 44)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .foregroundStyle(.white)
+                                .id(clip.id)
+                                .listRowBackground(
+                                    clip.id == currentClipID
+                                        ? Color.white.opacity(0.12)
+                                        : Color.black
+                                )
+                            }
+                            .onDelete(perform: deleteClips)
+                            .onMove(perform: reorderClips)
+                        }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.black)
+                        .frame(maxHeight: .infinity)
+                        .environment(\.editMode, .constant(isEditing ? .active : .inactive))
+                        .onChange(of: currentClipID) { _, newID in
+                            guard let id = newID else { return }
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                proxy.scrollTo(id, anchor: .center)
+                            }
                         }
                     }
-                }
+                } // end else (sortedClips non-empty)
 
                 Button {
                     Task { await exportVideo() }
@@ -262,6 +293,11 @@ struct PreviewView: View {
 
     private func rebuildPlayer() async {
         stopTimeObserver()
+        guard !sortedClips.isEmpty else {
+            player = nil
+            clipRanges = []
+            return
+        }
         let preservedTime = pendingResumeTime ?? player?.currentTime()
         pendingResumeTime = nil
         isRebuildingPlayer = true
