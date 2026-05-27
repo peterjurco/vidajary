@@ -47,6 +47,7 @@ struct PreviewView: View {
                             .font(.system(size: 20))
                             .foregroundStyle(isEditing ? .white : .white.opacity(0.6))
                     }
+                    .disabled(sortedClips.isEmpty)
                     Button { showMusicPickerSheet = true } label: {
                         Image(systemName: "music.note")
                             .font(.system(size: 20))
