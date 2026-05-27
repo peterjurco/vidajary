@@ -122,7 +122,6 @@ struct PreviewView: View {
                         .buttonStyle(.plain)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
                 } else {
                     ScrollViewReader { proxy in
                         List {
@@ -196,7 +195,7 @@ struct PreviewView: View {
                             }
                         }
                     }
-                } // end else (sortedClips non-empty)
+                }
 
                 Button {
                     Task { await exportVideo() }
@@ -296,6 +295,7 @@ struct PreviewView: View {
         guard !sortedClips.isEmpty else {
             player = nil
             clipRanges = []
+            isEditing = false
             return
         }
         let preservedTime = pendingResumeTime ?? player?.currentTime()
