@@ -101,7 +101,7 @@ struct PreviewView: View {
                         ProgressView().tint(.white)
                         Text("Importing videos…")
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white.opacity(0.7))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if sortedClips.isEmpty {
@@ -287,6 +287,10 @@ struct PreviewView: View {
         }
         .sheet(isPresented: $showLibraryPicker) {
             LibraryPickerView { clips in
+                guard !clips.isEmpty else {
+                    isImporting = false
+                    return
+                }
                 let sorted = clips.sorted { $0.2 < $1.2 }
                 let baseOrder = project.clips.count
                 for (i, (url, duration, creationDate)) in sorted.enumerated() {

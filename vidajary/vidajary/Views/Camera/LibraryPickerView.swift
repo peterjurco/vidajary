@@ -4,8 +4,8 @@ import AVFoundation
 
 struct LibraryPickerView: UIViewControllerRepresentable {
     var onPicked: ([(URL, TimeInterval, Date)]) -> Void
-    var onImportStarted: () -> Void
     var onDismissed: () -> Void
+    var onImportStarted: () -> Void
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration(photoLibrary: .shared())
@@ -44,9 +44,7 @@ struct LibraryPickerView: UIViewControllerRepresentable {
                         clips.append(clip)
                     }
                 }
-                if !clips.isEmpty {
-                    await MainActor.run { self.onPicked(clips) }
-                }
+                await MainActor.run { self.onPicked(clips) }
             }
         }
 
