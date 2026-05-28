@@ -17,6 +17,7 @@ struct PreviewView: View {
     @State private var showMusicPickerSheet = false
     @State private var isPlaying = false
     @State private var isRebuildingPlayer = false
+    @State private var isImporting = false
     @State private var thumbnails: [UUID: UIImage] = [:]
     @State private var isEditing = false
     @State private var clipToEdit: Clip?
@@ -95,7 +96,15 @@ struct PreviewView: View {
                 }
 
                 // Clip list with swipe-to-delete
-                if sortedClips.isEmpty {
+                if isImporting {
+                    VStack(spacing: 12) {
+                        ProgressView().tint(.white)
+                        Text("Importing videos…")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.5))
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if sortedClips.isEmpty {
                     VStack(spacing: 16) {
                         Image(systemName: "film")
                             .font(.system(size: 40))
@@ -286,7 +295,10 @@ struct PreviewView: View {
                 }
                 project.lastRecordedAt = Date()
                 try? context.save()
+                isImporting = false
                 Task { await rebuildPlayer() }
+            } onImportStarted: {
+                isImporting = true
             } onDismissed: {
                 showLibraryPicker = false
             }

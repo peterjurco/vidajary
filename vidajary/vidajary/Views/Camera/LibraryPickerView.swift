@@ -4,6 +4,7 @@ import AVFoundation
 
 struct LibraryPickerView: UIViewControllerRepresentable {
     var onPicked: ([(URL, TimeInterval, Date)]) -> Void
+    var onImportStarted: () -> Void
     var onDismissed: () -> Void
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
@@ -17,20 +18,25 @@ struct LibraryPickerView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(onPicked: onPicked, onDismissed: onDismissed) }
+    func makeCoordinator() -> Coordinator { Coordinator(onPicked: onPicked, onImportStarted: onImportStarted, onDismissed: onDismissed) }
 
     final class Coordinator: NSObject, PHPickerViewControllerDelegate {
         let onPicked: ([(URL, TimeInterval, Date)]) -> Void
+        let onImportStarted: () -> Void
         let onDismissed: () -> Void
 
-        init(onPicked: @escaping ([(URL, TimeInterval, Date)]) -> Void, onDismissed: @escaping () -> Void) {
+        init(onPicked: @escaping ([(URL, TimeInterval, Date)]) -> Void,
+             onImportStarted: @escaping () -> Void,
+             onDismissed: @escaping () -> Void) {
             self.onPicked = onPicked
+            self.onImportStarted = onImportStarted
             self.onDismissed = onDismissed
         }
 
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             DispatchQueue.main.async { self.onDismissed() }
             guard !results.isEmpty else { return }
+            DispatchQueue.main.async { self.onImportStarted() }
             Task {
                 var clips: [(URL, TimeInterval, Date)] = []
                 for result in results {
