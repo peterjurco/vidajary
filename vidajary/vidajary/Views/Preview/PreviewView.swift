@@ -278,8 +278,10 @@ struct PreviewView: View {
         }
         .sheet(isPresented: $showLibraryPicker) {
             LibraryPickerView { clips in
-                for (url, duration, creationDate) in clips {
-                    let clip = Clip(filename: url.lastPathComponent, duration: duration, sortOrder: project.clips.count, recordedAt: creationDate)
+                let sorted = clips.sorted { $0.2 < $1.2 }
+                let baseOrder = project.clips.count
+                for (i, (url, duration, creationDate)) in sorted.enumerated() {
+                    let clip = Clip(filename: url.lastPathComponent, duration: duration, sortOrder: baseOrder + i, recordedAt: creationDate)
                     project.clips.append(clip)
                 }
                 project.lastRecordedAt = Date()
