@@ -138,59 +138,7 @@ struct PreviewView: View {
                     ScrollViewReader { proxy in
                         List {
                             ForEach(sortedClips) { clip in
-                                HStack {
-                                    if let thumbnail = thumbnails[clip.id] {
-                                        Image(uiImage: thumbnail)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 60, height: 40)
-                                            .clipped()
-                                            .cornerRadius(4)
-                                    } else {
-                                        RoundedRectangle(cornerRadius: 4)
-                                            .fill(Color.gray.opacity(0.3))
-                                            .frame(width: 60, height: 40)
-                                    }
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(clip.recordedAt.formatted(date: .abbreviated, time: .shortened))
-                                            .font(.subheadline)
-                                        Text(formattedDuration((clip.trimEnd > 0 ? clip.trimEnd : clip.duration) - clip.trimStart))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Button {
-                                        if let range = clipRanges.first(where: { $0.id == clip.id }) {
-                                            player?.seek(to: range.start)
-                                            player?.play()
-                                            isPlaying = true
-                                        }
-                                    } label: {
-                                        Image(systemName: "play.fill")
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(.white.opacity(0.6))
-                                            .frame(width: 32, height: 44)
-                                    }
-                                    .buttonStyle(.plain)
-                                    Button {
-                                        player?.pause()
-                                        isPlaying = false
-                                        clipToEdit = clip
-                                    } label: {
-                                        Image(systemName: "square.and.pencil")
-                                            .font(.system(size: 16))
-                                            .foregroundStyle(.white.opacity(0.6))
-                                            .frame(width: 36, height: 44)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                                .foregroundStyle(.white)
-                                .id(clip.id)
-                                .listRowBackground(
-                                    clip.id == currentClipID
-                                        ? Color.white.opacity(0.12)
-                                        : Color.black
-                                )
+                                clipRow(clip)
                             }
                             .onDelete(perform: deleteClips)
                             .onMove(perform: reorderClips)
@@ -303,10 +251,10 @@ struct PreviewView: View {
                 try? context.save()
                 isImporting = false
                 Task { await rebuildPlayer() }
-            } onImportStarted: {
-                isImporting = true
             } onDismissed: {
                 showLibraryPicker = false
+            } onImportStarted: {
+                isImporting = true
             }
         }
     }
@@ -425,6 +373,63 @@ struct PreviewView: View {
             clip.sortOrder = i
         }
         try? context.save()
+    }
+
+    @ViewBuilder
+    private func clipRow(_ clip: Clip) -> some View {
+        HStack {
+            if let thumbnail = thumbnails[clip.id] {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 60, height: 40)
+                    .clipped()
+                    .cornerRadius(4)
+            } else {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 60, height: 40)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(clip.recordedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.subheadline)
+                Text(formattedDuration((clip.trimEnd > 0 ? clip.trimEnd : clip.duration) - clip.trimStart))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                if let range = clipRanges.first(where: { $0.id == clip.id }) {
+                    player?.seek(to: range.start)
+                    player?.play()
+                    isPlaying = true
+                }
+            } label: {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(width: 32, height: 44)
+            }
+            .buttonStyle(.plain)
+            Button {
+                player?.pause()
+                isPlaying = false
+                clipToEdit = clip
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(width: 36, height: 44)
+            }
+            .buttonStyle(.plain)
+        }
+        .foregroundStyle(.white)
+        .id(clip.id)
+        .listRowBackground(
+            clip.id == currentClipID
+                ? Color.white.opacity(0.12)
+                : Color.black
+        )
     }
 
     private func reorderClips(from source: IndexSet, to destination: Int) {
