@@ -59,6 +59,7 @@ struct PreviewView: View {
                             .font(.system(size: 20))
                             .foregroundStyle(.white.opacity(0.6))
                     }
+                    .disabled(isImporting)
                 }
                 .padding(.horizontal, 12)
 
@@ -130,6 +131,7 @@ struct PreviewView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
                         }
                         .buttonStyle(.plain)
+                        .disabled(isImporting)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
