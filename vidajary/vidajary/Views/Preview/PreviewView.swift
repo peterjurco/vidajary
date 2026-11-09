@@ -23,6 +23,7 @@ struct PreviewView: View {
     @State private var clipToEdit: Clip?
     @State private var currentClipID: UUID?
     @State private var timeObserverToken: Any?
+    @State private var rebuildTask: Task<Void, Never>?
     @State private var clipRanges: [(id: UUID, start: CMTime, end: CMTime)] = []
     @State private var pendingResumeTime: CMTime? = nil
 
@@ -195,7 +196,7 @@ struct PreviewView: View {
         }
         .task {
             initializeSortOrdersIfNeeded()
-            await rebuildPlayer()
+            scheduleRebuildPlayer()
         }
         .onAppear {
             Task { await detectOrientationFromFirstClip() }
@@ -204,6 +205,8 @@ struct PreviewView: View {
             isPlaying = false
         }
         .onDisappear {
+            rebuildTask?.cancel()
+            rebuildTask = nil
             stopTimeObserver()
             applyOrientation(landscape: false)
         }
@@ -227,12 +230,12 @@ struct PreviewView: View {
                 resumeTime: $pendingResumeTime
             )
             .onDisappear {
-                Task { await rebuildPlayer() }
+                scheduleRebuildPlayer()
             }
         }
         .sheet(isPresented: $showMusicPickerSheet) {
             MusicPickerSheet(project: project) {
-                Task { await rebuildPlayer() }
+                scheduleRebuildPlayer()
             }
         }
         .sheet(isPresented: $showLibraryPicker) {
@@ -250,13 +253,18 @@ struct PreviewView: View {
                 project.lastRecordedAt = Date()
                 try? context.save()
                 isImporting = false
-                Task { await rebuildPlayer() }
+                scheduleRebuildPlayer()
             } onDismissed: {
                 showLibraryPicker = false
             } onImportStarted: {
                 isImporting = true
             }
         }
+    }
+
+    private func scheduleRebuildPlayer() {
+        rebuildTask?.cancel()
+        rebuildTask = Task { await rebuildPlayer() }
     }
 
     private func rebuildPlayer() async {
@@ -299,6 +307,7 @@ struct PreviewView: View {
     }
 
     private func startTimeObserver() {
+        stopTimeObserver()
         guard let player else { return }
         let ranges = clipRanges
         let interval = CMTime(value: 1, timescale: 10)
@@ -337,9 +346,12 @@ struct PreviewView: View {
     private func exportVideo() async {
         isExporting = true
         exportProgress = 0
+        // Keep the screen awake so auto-lock can't suspend the export mid-render.
+        UIApplication.shared.isIdleTimerDisabled = true
         defer {
             isExporting = false
             exportProgress = 0
+            UIApplication.shared.isIdleTimerDisabled = false
         }
         do {
             let musicURL = project.musicFilename.map { clipsDirectory().appendingPathComponent($0) }
@@ -446,11 +458,14 @@ struct PreviewView: View {
         let dir = clipsDirectory()
         let toDelete = offsets.map { sortedClips[$0] }
         for clip in toDelete {
-            try? FileManager.default.removeItem(at: dir.appendingPathComponent(clip.filename))
             project.clips.removeAll { $0.id == clip.id }
+            let stillReferenced = project.clips.contains { $0.filename == clip.filename }
+            if !stillReferenced {
+                try? FileManager.default.removeItem(at: dir.appendingPathComponent(clip.filename))
+            }
         }
         try? context.save()
-        Task { await rebuildPlayer() }
+        scheduleRebuildPlayer()
     }
 
     private func formattedDuration(_ seconds: TimeInterval) -> String {

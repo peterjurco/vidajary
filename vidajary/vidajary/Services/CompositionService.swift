@@ -96,6 +96,7 @@ enum CompositionService {
         }
 
         struct ClipTimelineInfo {
+            let id: UUID
             let startTime: CMTime
             let endTime: CMTime
             let clipVolume: Float
@@ -161,6 +162,7 @@ enum CompositionService {
             cursor = CMTimeAdd(cursor, trimmedDuration)
 
             clipTimelineInfos.append(ClipTimelineInfo(
+                id: clip.id,
                 startTime: clipStart,
                 endTime: cursor,
                 clipVolume: clip.clipVolume,
@@ -252,8 +254,8 @@ enum CompositionService {
             audioMix = mix
         }
 
-        let clipRanges = zip(sortedClips, clipTimelineInfos).map { clip, info in
-            (id: clip.id, start: info.startTime, end: info.endTime)
+        let clipRanges = clipTimelineInfos.map { info in
+            (id: info.id, start: info.startTime, end: info.endTime)
         }
 
         return CompositionResult(composition: composition, videoComposition: videoComposition, audioMix: audioMix, clipRanges: clipRanges)

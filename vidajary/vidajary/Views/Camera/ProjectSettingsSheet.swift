@@ -80,7 +80,13 @@ struct ProjectSettingsSheet: View {
             } message: {
                 Text(exportError ?? "")
             }
-            .sheet(isPresented: $showShareSheet) {
+            .sheet(isPresented: $showShareSheet, onDismiss: {
+                UIApplication.shared.isIdleTimerDisabled = false
+                if let url = archiveURL {
+                    try? FileManager.default.removeItem(at: url)
+                    archiveURL = nil
+                }
+            }) {
                 if let url = archiveURL {
                     ShareSheet(items: [url]) { completed, error in
                         if let error {
@@ -110,6 +116,8 @@ struct ProjectSettingsSheet: View {
 
     private func startExport() {
         isExporting = true
+        // Keep the screen awake so auto-lock can't suspend the share-sheet upload (e.g. to Google Drive).
+        UIApplication.shared.isIdleTimerDisabled = true
         Task {
             let safeName = project.name
                 .components(separatedBy: CharacterSet(charactersIn: "/\\:*?\"<>|"))
@@ -124,6 +132,7 @@ struct ProjectSettingsSheet: View {
                 // isExporting cleared in sheet's onAppear to avoid gap before sheet presents
             } catch {
                 isExporting = false
+                UIApplication.shared.isIdleTimerDisabled = false
                 exportError = error.localizedDescription
             }
         }

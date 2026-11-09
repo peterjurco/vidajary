@@ -345,7 +345,7 @@ enum ArchiveService {
             switch self {
             case .invalidFormat: return "Not a valid Vidajary archive."
             case .truncated: return "The archive appears to be incomplete."
-            case .writeFailed: return "Not enough storage space to complete the operation."
+            case .writeFailed: return "Not enough storage space on this device. Free up some space and try again."
             }
         }
     }
