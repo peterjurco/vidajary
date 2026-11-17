@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
+import UniformTypeIdentifiers
 
 struct LibraryPickerView: UIViewControllerRepresentable {
     var onPicked: ([(URL, TimeInterval, Date)]) -> Void
@@ -9,7 +10,7 @@ struct LibraryPickerView: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration(photoLibrary: .shared())
-        config.filter = .videos
+        config.filter = .any(of: [.videos, .livePhotos])
         config.selectionLimit = 0
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = context.coordinator
@@ -55,8 +56,29 @@ struct LibraryPickerView: UIViewControllerRepresentable {
                 return assets.firstObject?.creationDate ?? Date()
             }()
 
-            return await withCheckedContinuation { continuation in
-                result.itemProvider.loadFileRepresentation(forTypeIdentifier: "public.movie") { url, error in
+            let provider = result.itemProvider
+            let destination: URL?
+            if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+                destination = await copyMovie(from: provider)
+            } else if provider.canLoadObject(ofClass: PHLivePhoto.self) {
+                destination = await extractLivePhotoVideo(from: provider)
+            } else {
+                destination = nil
+            }
+
+            guard let destination else { return nil }
+            do {
+                let duration = try await AVURLAsset(url: destination).load(.duration)
+                return (destination, duration.seconds, creationDate)
+            } catch {
+                try? FileManager.default.removeItem(at: destination)
+                return nil
+            }
+        }
+
+        private static func copyMovie(from provider: NSItemProvider) async -> URL? {
+            await withCheckedContinuation { continuation in
+                provider.loadFileRepresentation(forTypeIdentifier: UTType.movie.identifier) { url, error in
                     guard let url, error == nil else {
                         continuation.resume(returning: nil)
                         return
@@ -64,18 +86,36 @@ struct LibraryPickerView: UIViewControllerRepresentable {
                     let destination = newClipURL()
                     do {
                         try FileManager.default.copyItem(at: url, to: destination)
+                        continuation.resume(returning: destination)
                     } catch {
                         continuation.resume(returning: nil)
-                        return
                     }
-                    Task {
-                        do {
-                            let asset = AVURLAsset(url: destination)
-                            let duration = try await asset.load(.duration)
-                            continuation.resume(returning: (destination, duration.seconds, creationDate))
-                        } catch {
-                            continuation.resume(returning: nil)
-                        }
+                }
+            }
+        }
+
+        /// Writes the video part of a Live Photo to a new clip file.
+        private static func extractLivePhotoVideo(from provider: NSItemProvider) async -> URL? {
+            let livePhoto: PHLivePhoto? = await withCheckedContinuation { continuation in
+                provider.loadObject(ofClass: PHLivePhoto.self) { object, _ in
+                    continuation.resume(returning: object as? PHLivePhoto)
+                }
+            }
+            guard let livePhoto,
+                  let videoResource = PHAssetResource.assetResources(for: livePhoto)
+                    .first(where: { $0.type == .pairedVideo })
+            else { return nil }
+
+            let destination = newClipURL()
+            let options = PHAssetResourceRequestOptions()
+            options.isNetworkAccessAllowed = true
+            return await withCheckedContinuation { continuation in
+                PHAssetResourceManager.default().writeData(for: videoResource, toFile: destination, options: options) { error in
+                    if error != nil {
+                        try? FileManager.default.removeItem(at: destination)
+                        continuation.resume(returning: nil)
+                    } else {
+                        continuation.resume(returning: destination)
                     }
                 }
             }
